@@ -9,7 +9,7 @@ import Merging
 struct Note: Codable, Mergeable {
     var title = ""                                  // keeps the side that changed
     var address = Address()                         // merges by Address's own merge, if it has one
-    @Merged(.maximum) var highScore = 0                 // keeps the larger when both changed
+    @Merged(.maximum) var highScore = 0             // keeps the larger when both changed
 }
 
 var draft = mine
