@@ -5,13 +5,17 @@ extension Snapshot: Mergeable {
     /// changed keeps that side. Where both did, a part with a rule merges by it, objects merge key by key and
     /// arrays element by element, and anything else is a conflict.
     func merging(_ theirs: Snapshot, base: Snapshot) throws(MergeConflict<Snapshot>) -> Snapshot {
-        if self == theirs || theirs == base { return self }
+        if theirs == base { return self }
         if self == base { return theirs }
+        // Both sides changed it. Equal changes still go to a rule, since a counter both sides added one to
+        // has gone up by two.
         switch (self, theirs, base) {
         case let (.merged(ours, rule), .merged(theirs, _), .merged(base, _)): return .merged(try rule.merge(ours, theirs, base), rule)
         case let (.object(ours), .object(theirs), .object(base)): return .object(try Self.merge(ours, theirs, base: base))
         case let (.array(ours), .array(theirs), .array(base)): return .array(try Self.merge(ours, theirs, base: base))
-        default: throw MergeConflict(base: base, ours: self, theirs: theirs)
+        default:
+            guard self == theirs else { throw MergeConflict(base: base, ours: self, theirs: theirs) }
+            return self
         }
     }
 
@@ -42,7 +46,7 @@ extension Snapshot: Mergeable {
         var merged: [String: Snapshot] = [:]
         for key in Set(ours.keys).union(theirs.keys).union(base.keys) {
             let (mine, other, original) = (ours[key], theirs[key], base[key])
-            if mine == other || other == original {
+            if other == original {
                 merged[key] = mine
             } else if mine == original {
                 merged[key] = other
@@ -52,7 +56,7 @@ extension Snapshot: Mergeable {
                 } else {
                     merged[key] = try mine.merging(other)
                 }
-            } else {
+            } else if mine != other {
                 throw MergeConflict(base: original, ours: mine ?? .null, theirs: other ?? .null)
             }
         }

@@ -9,7 +9,7 @@ import Merging
 struct Note: Codable, Mergeable {
     var title = ""                                  // keeps the side that changed
     var address = Address()                         // merges by Address's own merge, if it has one
-    @Merged(MaxMerge()) var highScore = 0           // keeps the larger when both changed
+    @Merged(.max) var highScore = 0                 // keeps the larger when both changed
 }
 
 var draft = mine
@@ -55,15 +55,37 @@ The snapshot merge encodes and decodes on every merge, which suits syncing rathe
 
 ## Strategies
 
-A strategy implements the three-way merge, and the two-way merge too if it needs no ancestor. It's made with
-`init()` when a value decodes, so it holds no settings of its own.
+The standard strategies take dot syntax, and each is declared only for the types it suits, so
+`@Merged(.byWord) var count = 0` doesn't compile:
 
 ```swift
-struct MaxMerge<Value: Comparable & Sendable>: MergeStrategy {
-    func merge(base: Value, ours: Value, theirs: Value) -> Value { max(ours, theirs) }
-    func merge(ours: Value, theirs: Value) -> Value { max(ours, theirs) }
+struct Game: Codable, Mergeable {
+    @Merged(.max) var highScore = 0                 // the larger, by the type's own <
+    @Merged(.adding) var wins = 0                   // a counter: both sides' increments count
+    @Merged(.trueWins) var flagged = false          // a flag anyone can set
+    @Merged(.byWord) var note = ""                  // edits to different words combine
 }
 ```
+
+A strategy decides only when both sides changed a property, even to the same value, so two increments of
+a counter both count. `.max` and `.trueWins` also merge without a base. `.adding` and `.byWord` need one.
+
+A custom strategy implements the three-way merge, and the two-way merge too if it needs no ancestor. It's
+made with `init()` when a value decodes, so it holds no settings of its own.
+
+```swift
+struct LongerMerge: MergeStrategy {
+    typealias Value = String
+
+    func merge(base: String, ours: String, theirs: String) -> String {
+        ours.count >= theirs.count ? ours : theirs
+    }
+}
+
+@Merged(LongerMerge()) var title = ""
+```
+
+A non-generic strategy whose merge doesn't throw names its value with `typealias Value`.
 
 ## Requirements
 
