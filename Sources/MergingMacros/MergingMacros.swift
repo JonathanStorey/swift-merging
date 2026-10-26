@@ -25,22 +25,36 @@ public struct MergeableMacro: ExtensionMacro {
         let access = declaration.modifiers.contains { ["public", "package"].contains($0.name.text) }
             ? declaration.modifiers.first { ["public", "package"].contains($0.name.text) }!.name.text + " " : ""
 
-        var merges: [String] = []
+        var merges: [(property: String, with: String)] = []
         for member in declaration.memberBlock.members {
             guard let variable = member.decl.as(VariableDeclSyntax.self), variable.bindingSpecifier.tokenKind == .keyword(.var),
                   !variable.modifiers.contains(where: { ["static", "class"].contains($0.name.text) }) else { continue }
             let strategy = mergedStrategy(of: variable)
             for binding in variable.bindings where isStored(binding) {
                 guard let property = binding.pattern.as(IdentifierPatternSyntax.self)?.identifier.trimmedDescription else { continue }
-                let with = strategy.map { ", with: \($0)" } ?? ""
-                merges.append(
-                    "merged.\(property) = try _mergeProperty(base: base?.\(property), ours: self.\(property), theirs: theirs.\(property)\(with))"
-                )
+                merges.append((property, strategy.map { ", with: \($0)" } ?? ""))
             }
         }
 
-        // Lines at their final indentation, since interpolated text keeps its own.
-        var function = ["    \(access)func merging(_ theirs: \(name), base: \(name)?) throws(MergeConflict<\(name)>) -> \(name) {"]
+        let twoWay = merging(
+            "_ theirs: \(name)", conflict: "ours: self, theirs: theirs", name: name, access: access,
+            merges: merges.map { "merged.\($0.property) = try _mergeProperty(ours: self.\($0.property), theirs: theirs.\($0.property)\($0.with))" }
+        )
+        let threeWay = merging(
+            "_ theirs: \(name), base: \(name)", conflict: "base: base, ours: self, theirs: theirs", name: name, access: access,
+            merges: merges.map {
+                "merged.\($0.property) = try _mergeProperty(base: base.\($0.property), ours: self.\($0.property), theirs: theirs.\($0.property)\($0.with))"
+            }
+        )
+        let conformance = protocols.isEmpty ? "" : ": Mergeable"
+        let lines = ["extension \(name)\(conformance) {"] + twoWay + [""] + threeWay + ["}"]
+        let source = DeclSyntax(stringLiteral: lines.joined(separator: "\n"))
+        return [source.cast(ExtensionDeclSyntax.self)]
+    }
+
+    /// One `merging` function, as lines at their final indentation, since interpolated text keeps its own.
+    private static func merging(_ parameters: String, conflict: String, name: String, access: String, merges: [String]) -> [String] {
+        var function = ["    \(access)func merging(\(parameters)) throws(MergeConflict<\(name)>) -> \(name) {"]
         if merges.isEmpty {
             function.append("        return self")
         } else {
@@ -48,15 +62,12 @@ public struct MergeableMacro: ExtensionMacro {
             function.append("        do {")
             function += merges.map { "            " + $0 }
             function.append("        } catch {")
-            function.append("            throw MergeConflict(base: base, ours: self, theirs: theirs)")
+            function.append("            throw MergeConflict(\(conflict))")
             function.append("        }")
             function.append("        return merged")
         }
         function.append("    }")
-        let conformance = protocols.isEmpty ? "" : ": Mergeable"
-        let lines = ["extension \(name)\(conformance) {"] + function + ["}"]
-        let source = DeclSyntax(stringLiteral: lines.joined(separator: "\n"))
-        return [source.cast(ExtensionDeclSyntax.self)]
+        return function
     }
 
     /// A stored property: no accessors, or only observers.

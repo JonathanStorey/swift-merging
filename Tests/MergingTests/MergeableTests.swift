@@ -100,7 +100,7 @@ struct Booking: Mergeable {
     var note = ""
     var confirmed = false
 
-    func merging(_ theirs: Booking, base: Booking?) -> Booking {
+    func merging(_ theirs: Booking) -> Booking {
         confirmed ? self : theirs
     }
 }

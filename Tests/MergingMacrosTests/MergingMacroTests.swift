@@ -28,11 +28,22 @@ import Testing
             }
 
             extension Game: Mergeable {
-                public func merging(_ theirs: Game, base: Game?) throws(MergeConflict<Game>) -> Game {
+                public func merging(_ theirs: Game) throws(MergeConflict<Game>) -> Game {
                     var merged = self
                     do {
-                        merged.title = try _mergeProperty(base: base?.title, ours: self.title, theirs: theirs.title)
-                        merged.highScore = try _mergeProperty(base: base?.highScore, ours: self.highScore, theirs: theirs.highScore, with: MaxMerge())
+                        merged.title = try _mergeProperty(ours: self.title, theirs: theirs.title)
+                        merged.highScore = try _mergeProperty(ours: self.highScore, theirs: theirs.highScore, with: MaxMerge())
+                    } catch {
+                        throw MergeConflict(ours: self, theirs: theirs)
+                    }
+                    return merged
+                }
+
+                public func merging(_ theirs: Game, base: Game) throws(MergeConflict<Game>) -> Game {
+                    var merged = self
+                    do {
+                        merged.title = try _mergeProperty(base: base.title, ours: self.title, theirs: theirs.title)
+                        merged.highScore = try _mergeProperty(base: base.highScore, ours: self.highScore, theirs: theirs.highScore, with: MaxMerge())
                     } catch {
                         throw MergeConflict(base: base, ours: self, theirs: theirs)
                     }
@@ -77,7 +88,11 @@ import Testing
             }
 
             extension Game: Mergeable {
-                func merging(_ theirs: Game, base: Game?) throws(MergeConflict<Game>) -> Game {
+                func merging(_ theirs: Game) throws(MergeConflict<Game>) -> Game {
+                    return self
+                }
+
+                func merging(_ theirs: Game, base: Game) throws(MergeConflict<Game>) -> Game {
                     return self
                 }
             }
@@ -94,13 +109,13 @@ import Testing
             @Mergeable
             struct Booking {
                 var note = ""
-                func merging(_ theirs: Booking, base: Booking?) -> Booking { self }
+                func merging(_ theirs: Booking) -> Booking { self }
             }
             """,
             expandedSource: """
             struct Booking {
                 var note = ""
-                func merging(_ theirs: Booking, base: Booking?) -> Booking { self }
+                func merging(_ theirs: Booking) -> Booking { self }
             }
             """,
             diagnostics: [

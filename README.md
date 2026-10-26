@@ -17,12 +17,13 @@ var draft = mine
 try draft.merge(yours, base: original)         // or draft.merging(yours, base: original)
 ```
 
-`Mergeable` is the main protocol, with one requirement: `merging(_:base:)` merges `theirs` into a value,
-which is ours, using their common ancestor when it's known. `merge(_:base:)` does the same in place, and
-leaves the value unchanged on a conflict. The static `merge(ours:theirs:)` and `merge(base:ours:theirs:)`
-are built on it too. A merge throws a `MergeConflict` holding the versions when it can't merge them.
+`Mergeable` is the main protocol, with two requirements. `merging(_:)` merges `theirs` into a value, which
+is ours. `merging(_:base:)` does the same knowing their common ancestor, and uses `merging(_:)` unless the
+type writes its own. The mutating `merge(_:)` and `merge(_:base:)` leave the value unchanged on a
+conflict, and the static `merge(ours:theirs:)` and `merge(base:ours:theirs:)` are there too. A merge throws a
+`MergeConflict` holding the versions when it can't merge them.
 
-`@Mergeable` writes `merging(_:base:)` for a struct, one stored `var` at a time:
+`@Mergeable` writes both for a struct, one stored `var` at a time:
 
 - `@Merged(_:)` picks a property's `MergeStrategy`, for a type that merges differently in different
   places, such as an `Int` that's a counter in one property and a high score in another.
@@ -38,7 +39,7 @@ struct Booking: Mergeable {
     var note = ""
     var confirmed = false
 
-    func merging(_ theirs: Booking, base: Booking?) -> Booking {
+    func merging(_ theirs: Booking) -> Booking {
         confirmed ? self : theirs
     }
 }
