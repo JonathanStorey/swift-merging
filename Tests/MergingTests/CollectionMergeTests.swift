@@ -82,7 +82,7 @@ struct Board: Codable, Equatable, Mergeable {
 
 @Suite struct CollectionStrategyTests {
     struct Note: Codable, Equatable, Mergeable {
-        @Merged(.asSet) var tags = ["a", "b", "c"]
+        @Merged(.byMembership) var tags = ["a", "b", "c"]
         @Merged(.byKey) var scores: [Spot: Int] = [Spot(x: 0, y: 0): 1]
     }
 

@@ -1,7 +1,7 @@
 /// Merges a set, or an array treated as one, by what each side added and removed: an element is kept if
 /// either side added it, and removed if either side removed it. Order doesn't matter. Without a base,
 /// only equal sets merge.
-public struct SetMerge: MergeStrategy {
+public struct MembershipMerge: MergeStrategy {
     public typealias Value = Snapshot
 
     public init() {}
@@ -23,9 +23,9 @@ public struct SetMerge: MergeStrategy {
     }
 }
 
-extension MergeStrategy where Self == SetMerge {
-    /// Merges an array as a set, such as tags, ignoring its order.
-    public static var asSet: SetMerge { SetMerge() }
+extension MergeStrategy where Self == MembershipMerge {
+    /// Merges who's in a collection, such as tags, ignoring its order.
+    public static var byMembership: MembershipMerge { MembershipMerge() }
 }
 
 /// Every set merges as one, since it encodes in no particular order.
