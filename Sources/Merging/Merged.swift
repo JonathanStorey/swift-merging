@@ -4,7 +4,7 @@
 /// ```swift
 /// struct Player: Codable, Mergeable {
 ///     var name = ""
-///     @Merged(MaxMerge()) var highScore = 0
+///     @Merged(.max) var highScore = 0
 /// }
 /// ```
 @propertyWrapper

@@ -2,13 +2,16 @@
 /// different places, such as an `Int` that's a counter in one and a high score in another. A strategy
 /// decides only when both sides changed the property.
 ///
-/// Implement the three-way merge. The two-way merge throws a conflict unless the strategy needs no
-/// ancestor and implements it too:
+/// Implement the three-way merge, and the two-way merge too if the strategy needs no ancestor. The
+/// standard strategies, such as `.max`, are in `StandardMerge`.
 ///
 /// ```swift
-/// struct MaxMerge<Value: Comparable & Sendable>: MergeStrategy {
-///     func merge(base: Value, ours: Value, theirs: Value) -> Value { max(ours, theirs) }
-///     func merge(ours: Value, theirs: Value) -> Value { max(ours, theirs) }
+/// struct LongerMerge: MergeStrategy {
+///     typealias Value = String
+///
+///     func merge(base: String, ours: String, theirs: String) -> String {
+///         ours.count >= theirs.count ? ours : theirs
+///     }
 /// }
 /// ```
 ///
