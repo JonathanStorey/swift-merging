@@ -100,8 +100,8 @@ struct Booking: Mergeable {
     var note = ""
     var confirmed = false
 
-    static func merge(ours: Booking, theirs: Booking) throws(MergeConflict<Booking>) -> Booking {
-        ours.confirmed ? ours : theirs
+    func merging(_ theirs: Booking, base: Booking?) -> Booking {
+        confirmed ? self : theirs
     }
 }
 
@@ -112,5 +112,8 @@ struct Booking: Mergeable {
         let theirs = Booking(note: "c", confirmed: true)
         #expect(try Booking.merge(base: base, ours: ours, theirs: theirs).note == "c")
         #expect(try Booking.merge(ours: theirs, theirs: ours).note == "c")
+        var mine = ours
+        try mine.merge(theirs)
+        #expect(mine.note == "c")
     }
 }

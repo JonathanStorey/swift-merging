@@ -17,12 +17,12 @@ var draft = mine
 try draft.merge(yours, base: original)         // or draft.merging(yours, base: original)
 ```
 
-`Mergeable` is the main protocol: a type merges with `merge(ours:theirs:)`, and `merge(base:ours:theirs:)`
-uses it unless the type writes its own. A merge throws a `MergeConflict` holding the versions when it
-can't merge them. On any value, `merge(_:base:)` and `merging(_:base:)` treat the value as ours, and use
-the two-way merge when there's no base.
+`Mergeable` is the main protocol, with one requirement: `merging(_:base:)` merges `theirs` into a value,
+which is ours, using their common ancestor when it's known. `merge(_:base:)` does the same in place, and
+leaves the value unchanged on a conflict. The static `merge(ours:theirs:)` and `merge(base:ours:theirs:)`
+are built on it too. A merge throws a `MergeConflict` holding the versions when it can't merge them.
 
-`@Mergeable` writes both for a struct, one stored `var` at a time:
+`@Mergeable` writes `merging(_:base:)` for a struct, one stored `var` at a time:
 
 - `@Merged(_:)` picks a property's `MergeStrategy`, for a type that merges differently in different
   places, such as an `Int` that's a counter in one property and a high score in another.
@@ -38,14 +38,14 @@ struct Booking: Mergeable {
     var note = ""
     var confirmed = false
 
-    static func merge(ours: Booking, theirs: Booking) throws(MergeConflict<Booking>) -> Booking {
-        ours.confirmed ? ours : theirs
+    func merging(_ theirs: Booking, base: Booking?) -> Booking {
+        confirmed ? self : theirs
     }
 }
 ```
 
 The macro merges properties, and a hand-written conformance merges the whole value. The two don't mix:
-a `@Mergeable` struct that declares its own `merge` is a compile error, and so is `@Merged` outside one.
+a `@Mergeable` struct that declares its own merge is a compile error, and so is `@Merged` outside one.
 
 A generic strategy names its value type in `@Merged`, as in `MaxMerge<Int>()`, because a macro's
 argument is type-checked on its own, without the property's type.

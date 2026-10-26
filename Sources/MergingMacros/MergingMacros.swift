@@ -4,7 +4,7 @@ import SwiftSyntax
 import SwiftSyntaxMacros
 
 /// `@Mergeable`: conforms a struct to `Mergeable`, merging each stored `var` with its `@Merged` strategy or
-/// by its type. A struct that declares its own `merge` is an error, since the macro owns both.
+/// by its type. A struct that declares its own `merge` or `merging` is an error, since the macro owns them.
 public struct MergeableMacro: ExtensionMacro {
     public static func expansion(
         of node: AttributeSyntax, attachedTo declaration: some DeclGroupSyntax, providingExtensionsOf type: some TypeSyntaxProtocol,
@@ -14,7 +14,7 @@ public struct MergeableMacro: ExtensionMacro {
             context.diagnose(Diagnostic(node: node, message: MergingMessage.notStruct))
             return []
         }
-        if declares(declaration, labels: ["ours", "theirs"]) || declares(declaration, labels: ["base", "ours", "theirs"]) {
+        if declaresMerge(declaration) {
             context.diagnose(Diagnostic(
                 node: node, message: MergingMessage.declaresMerge,
                 fixIt: FixIt(message: RemoveMergeable(), changes: [.replace(oldNode: Syntax(node), newNode: Syntax(TokenSyntax.unknown("")))])
@@ -34,41 +34,27 @@ public struct MergeableMacro: ExtensionMacro {
                 guard let property = binding.pattern.as(IdentifierPatternSyntax.self)?.identifier.trimmedDescription else { continue }
                 let with = strategy.map { ", with: \($0)" } ?? ""
                 merges.append(
-                    "merged.\(property) = try _mergeProperty(base: base?.\(property), ours: ours.\(property), theirs: theirs.\(property)\(with))"
+                    "merged.\(property) = try _mergeProperty(base: base?.\(property), ours: self.\(property), theirs: theirs.\(property)\(with))"
                 )
             }
         }
 
         // Lines at their final indentation, since interpolated text keeps its own.
-        var body = ["    private static func mergeProperties(base: \(name)?, ours: \(name), theirs: \(name)) throws(MergeConflict<\(name)>) -> \(name) {"]
+        var function = ["    \(access)func merging(_ theirs: \(name), base: \(name)?) throws(MergeConflict<\(name)>) -> \(name) {"]
         if merges.isEmpty {
-            body.append("        return ours")
+            function.append("        return self")
         } else {
-            body.append("        var merged = ours")
-            body.append("        do {")
-            body += merges.map { "            " + $0 }
-            body.append("        } catch {")
-            body.append("            throw MergeConflict(base: base, ours: ours, theirs: theirs)")
-            body.append("        }")
-            body.append("        return merged")
+            function.append("        var merged = self")
+            function.append("        do {")
+            function += merges.map { "            " + $0 }
+            function.append("        } catch {")
+            function.append("            throw MergeConflict(base: base, ours: self, theirs: theirs)")
+            function.append("        }")
+            function.append("        return merged")
         }
-        body.append("    }")
-
-        let functions: [[String]] = [
-            [
-                "    \(access)static func merge(ours: \(name), theirs: \(name)) throws(MergeConflict<\(name)>) -> \(name) {",
-                "        try mergeProperties(base: nil, ours: ours, theirs: theirs)",
-                "    }",
-            ],
-            [
-                "    \(access)static func merge(base: \(name), ours: \(name), theirs: \(name)) throws(MergeConflict<\(name)>) -> \(name) {",
-                "        try mergeProperties(base: base, ours: ours, theirs: theirs)",
-                "    }",
-            ],
-            body,
-        ]
+        function.append("    }")
         let conformance = protocols.isEmpty ? "" : ": Mergeable"
-        let lines = ["extension \(name)\(conformance) {"] + Array(functions.joined(separator: [""])) + ["}"]
+        let lines = ["extension \(name)\(conformance) {"] + function + ["}"]
         let source = DeclSyntax(stringLiteral: lines.joined(separator: "\n"))
         return [source.cast(ExtensionDeclSyntax.self)]
     }
@@ -88,11 +74,11 @@ public struct MergeableMacro: ExtensionMacro {
         return nil
     }
 
-    /// Whether the struct declares a static `merge` with these argument labels.
-    private static func declares(_ declaration: some DeclGroupSyntax, labels: [String]) -> Bool {
+    /// Whether the struct declares a `merge` or `merging` of its own.
+    private static func declaresMerge(_ declaration: some DeclGroupSyntax) -> Bool {
         declaration.memberBlock.members.contains { member in
-            guard let function = member.decl.as(FunctionDeclSyntax.self), function.name.text == "merge" else { return false }
-            return function.signature.parameterClause.parameters.map(\.firstName.text) == labels
+            guard let function = member.decl.as(FunctionDeclSyntax.self) else { return false }
+            return ["merge", "merging"].contains(function.name.text)
         }
     }
 }
@@ -130,7 +116,7 @@ enum MergingMessage: String, DiagnosticMessage {
         case .notStruct: "@Mergeable applies to a struct"
         case .notStoredVar: "@Merged applies to one stored 'var' property"
         case .outsideMergeable: "@Merged needs its type to be @Mergeable"
-        case .declaresMerge: "@Mergeable writes merge for you. Remove @Mergeable to write your own"
+        case .declaresMerge: "@Mergeable writes the merge for you. Remove @Mergeable to write your own"
         }
     }
 

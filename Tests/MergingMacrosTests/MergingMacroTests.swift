@@ -28,21 +28,13 @@ import Testing
             }
 
             extension Game: Mergeable {
-                public static func merge(ours: Game, theirs: Game) throws(MergeConflict<Game>) -> Game {
-                    try mergeProperties(base: nil, ours: ours, theirs: theirs)
-                }
-
-                public static func merge(base: Game, ours: Game, theirs: Game) throws(MergeConflict<Game>) -> Game {
-                    try mergeProperties(base: base, ours: ours, theirs: theirs)
-                }
-
-                private static func mergeProperties(base: Game?, ours: Game, theirs: Game) throws(MergeConflict<Game>) -> Game {
-                    var merged = ours
+                public func merging(_ theirs: Game, base: Game?) throws(MergeConflict<Game>) -> Game {
+                    var merged = self
                     do {
-                        merged.title = try _mergeProperty(base: base?.title, ours: ours.title, theirs: theirs.title)
-                        merged.highScore = try _mergeProperty(base: base?.highScore, ours: ours.highScore, theirs: theirs.highScore, with: MaxMerge())
+                        merged.title = try _mergeProperty(base: base?.title, ours: self.title, theirs: theirs.title)
+                        merged.highScore = try _mergeProperty(base: base?.highScore, ours: self.highScore, theirs: theirs.highScore, with: MaxMerge())
                     } catch {
-                        throw MergeConflict(base: base, ours: ours, theirs: theirs)
+                        throw MergeConflict(base: base, ours: self, theirs: theirs)
                     }
                     return merged
                 }
@@ -85,16 +77,8 @@ import Testing
             }
 
             extension Game: Mergeable {
-                static func merge(ours: Game, theirs: Game) throws(MergeConflict<Game>) -> Game {
-                    try mergeProperties(base: nil, ours: ours, theirs: theirs)
-                }
-
-                static func merge(base: Game, ours: Game, theirs: Game) throws(MergeConflict<Game>) -> Game {
-                    try mergeProperties(base: base, ours: ours, theirs: theirs)
-                }
-
-                private static func mergeProperties(base: Game?, ours: Game, theirs: Game) throws(MergeConflict<Game>) -> Game {
-                    return ours
+                func merging(_ theirs: Game, base: Game?) throws(MergeConflict<Game>) -> Game {
+                    return self
                 }
             }
             """,
@@ -110,18 +94,18 @@ import Testing
             @Mergeable
             struct Booking {
                 var note = ""
-                static func merge(ours: Booking, theirs: Booking) -> Booking { ours }
+                func merging(_ theirs: Booking, base: Booking?) -> Booking { self }
             }
             """,
             expandedSource: """
             struct Booking {
                 var note = ""
-                static func merge(ours: Booking, theirs: Booking) -> Booking { ours }
+                func merging(_ theirs: Booking, base: Booking?) -> Booking { self }
             }
             """,
             diagnostics: [
                 DiagnosticSpec(
-                    message: "@Mergeable writes merge for you. Remove @Mergeable to write your own", line: 1, column: 1,
+                    message: "@Mergeable writes the merge for you. Remove @Mergeable to write your own", line: 1, column: 1,
                     fixIts: [FixItSpec(message: "Remove @Mergeable")]
                 )
             ],

@@ -12,14 +12,12 @@ public func _mergeProperty<T: Equatable & Sendable>(base: T?, ours: T, theirs: T
 }
 
 public func _mergeProperty<T: Mergeable>(base: T?, ours: T, theirs: T) throws(MergeConflict<T>) -> T {
-    guard let base else { return try T.merge(ours: ours, theirs: theirs) }
-    return try T.merge(base: base, ours: ours, theirs: theirs)
+    try ours.merging(theirs, base: base)
 }
 
 /// A type that's both uses its own merge.
 public func _mergeProperty<T: Mergeable & Equatable>(base: T?, ours: T, theirs: T) throws(MergeConflict<T>) -> T {
-    guard let base else { return try T.merge(ours: ours, theirs: theirs) }
-    return try T.merge(base: base, ours: ours, theirs: theirs)
+    try ours.merging(theirs, base: base)
 }
 
 public func _mergeProperty<S: MergeStrategy>(
