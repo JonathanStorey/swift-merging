@@ -1,10 +1,10 @@
 /// A snapshot merges like any other value, and a conflict holds the part that clashed, with an absent
 /// object key shown as `null`.
-extension Snapshot: Mergeable {
+extension MergeTree: Mergeable {
     /// Merges `theirs` into this snapshot, which is ours, knowing their common ancestor. A part only one side
     /// changed keeps that side. Where both did, a part with a rule merges by it, objects merge key by key and
     /// arrays element by element, and anything else is a conflict.
-    func merging(_ theirs: Snapshot, base: Snapshot) throws(MergeConflict<Snapshot>) -> Snapshot {
+    func merging(_ theirs: MergeTree, base: MergeTree) throws(MergeConflict<MergeTree>) -> MergeTree {
         if theirs == base { return self }
         if self == base { return theirs }
         // Both sides changed it. Equal changes still go to a rule, since a counter both sides added one to
@@ -20,17 +20,17 @@ extension Snapshot: Mergeable {
     }
 
     /// Merges without a common ancestor, so only what's equal, or what has a rule for merging without one.
-    func merging(_ theirs: Snapshot) throws(MergeConflict<Snapshot>) -> Snapshot {
+    func merging(_ theirs: MergeTree) throws(MergeConflict<MergeTree>) -> MergeTree {
         if self == theirs { return self }
         switch (self, theirs) {
         case let (.merged(ours, rule), .merged(theirs, _)):
             return .merged(try rule.merge(ours, theirs, nil), rule)
         case let (.object(ours), .object(theirs)) where Set(ours.keys) == Set(theirs.keys):
-            var merged: [String: Snapshot] = [:]
+            var merged: [String: MergeTree] = [:]
             for (key, value) in ours { merged[key] = try value.merging(theirs[key]!) }
             return .object(merged)
         case let (.array(ours), .array(theirs)) where ours.count == theirs.count:
-            var merged: [Snapshot] = []
+            var merged: [MergeTree] = []
             for (value, other) in zip(ours, theirs) { merged.append(try value.merging(other)) }
             return .array(merged)
         default:
@@ -41,9 +41,9 @@ extension Snapshot: Mergeable {
     /// Merges key by key. A key both sides added merges without a base, and a key one side removed while
     /// the other changed it is a conflict.
     private static func merge(
-        _ ours: [String: Snapshot], _ theirs: [String: Snapshot], base: [String: Snapshot]
-    ) throws(MergeConflict<Snapshot>) -> [String: Snapshot] {
-        var merged: [String: Snapshot] = [:]
+        _ ours: [String: MergeTree], _ theirs: [String: MergeTree], base: [String: MergeTree]
+    ) throws(MergeConflict<MergeTree>) -> [String: MergeTree] {
+        var merged: [String: MergeTree] = [:]
         for key in Set(ours.keys).union(theirs.keys).union(base.keys) {
             let (mine, other, original) = (ours[key], theirs[key], base[key])
             if other == original {
@@ -66,10 +66,10 @@ extension Snapshot: Mergeable {
     /// Merges element by element, like a three-way merge of lines. An element either side removed is removed,
     /// and what each side inserted goes where it was inserted, ours first. Where both sides replaced the same
     /// element with one element each, those two merge; any other replacement both sides made is a conflict.
-    private static func merge(_ ours: [Snapshot], _ theirs: [Snapshot], base: [Snapshot]) throws(MergeConflict<Snapshot>) -> [Snapshot] {
+    private static func merge(_ ours: [MergeTree], _ theirs: [MergeTree], base: [MergeTree]) throws(MergeConflict<MergeTree>) -> [MergeTree] {
         let mine = Edits(ours, from: base)
         let other = Edits(theirs, from: base)
-        var merged: [Snapshot] = []
+        var merged: [MergeTree] = []
         for index in 0...base.count {
             let (inserted, theirsInserted) = (mine.inserted[index], other.inserted[index])
             if inserted == theirsInserted || theirsInserted.isEmpty {
@@ -98,9 +98,9 @@ extension Snapshot: Mergeable {
 /// version inserted before it.
 private struct Edits {
     var removed: Set<Int> = []
-    var inserted: [[Snapshot]]
+    var inserted: [[MergeTree]]
 
-    init(_ side: [Snapshot], from base: [Snapshot]) {
+    init(_ side: [MergeTree], from base: [MergeTree]) {
         inserted = Array(repeating: [], count: base.count + 1)
         var insertedOffsets: Set<Int> = []
         for change in side.difference(from: base) {

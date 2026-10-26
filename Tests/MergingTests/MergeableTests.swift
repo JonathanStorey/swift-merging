@@ -2,8 +2,8 @@ import Foundation
 import Merging
 import Testing
 
-/// Keeps the larger value, with or without a base.
-struct MaxMerge<Value: Comparable & Sendable>: MergeStrategy {
+/// A typed strategy: keeps the larger value by the type's own `<`, with or without a base.
+struct Larger<Value: Comparable & Sendable>: MergeStrategy {
     func merge(base: Value, ours: Value, theirs: Value) -> Value { max(ours, theirs) }
     func merge(ours: Value, theirs: Value) -> Value { max(ours, theirs) }
 }
@@ -35,7 +35,7 @@ struct Player: Codable, Equatable, Mergeable {
     var name = ""
     var address = Address()
     var booking = Booking()
-    @Merged(MaxMerge()) var highScore = 0
+    @Merged(Larger()) var highScore = 0
     @Merged(CounterMerge()) var wins = 0
 }
 

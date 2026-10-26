@@ -1,5 +1,5 @@
 import Foundation
-import Merging
+@testable import Merging
 import Testing
 
 struct Level: Codable, Comparable, Sendable {
@@ -8,9 +8,9 @@ struct Level: Codable, Comparable, Sendable {
 }
 
 struct Game: Codable, Equatable, Mergeable {
-    @Merged(.max) var highScore = 10
-    @Merged(.max) var level = Level(number: 1)
-    @Merged(.max) var lastSeen = Date(timeIntervalSinceReferenceDate: 100)
+    @Merged(.maximum) var highScore = 10
+    @Merged(Larger()) var level = Level(number: 1)
+    @Merged(.maximum) var lastSeen = Date(timeIntervalSinceReferenceDate: 100)
     @Merged(.adding) var wins = 3
     @Merged(.adding) var distance = 1.5
     @Merged(.trueWins) var flagged = false
@@ -29,7 +29,7 @@ struct Game: Codable, Equatable, Mergeable {
         return try mine.merging(other, base: base)
     }
 
-    @Test func maxUsesTheTypesOwnOrder() throws {
+    @Test func maxKeepsTheLargerAndATypedStrategyUsesTheTypesOrder() throws {
         let merged = try merge({ $0.highScore = 30; $0.level = Level(number: 5); $0.lastSeen = Date(timeIntervalSinceReferenceDate: 300) },
                                { $0.highScore = 20; $0.level = Level(number: 3); $0.lastSeen = Date(timeIntervalSinceReferenceDate: 200) })
         #expect(merged.highScore == 30)
@@ -81,7 +81,7 @@ struct Game: Codable, Equatable, Mergeable {
 
     @Test func wordsJoinBackToTheText() {
         let text = "  Hello, world!  Don't stop.\r\nNew line"
-        #expect(MergeKindProbe.words(text) == ["  ", "Hello, ", "world!  ", "Don't ", "stop.\r\n", "New ", "line"])
+        #expect(WordMerge.words(text).array?.compactMap(\.string) == ["  ", "Hello, ", "world!  ", "Don't ", "stop.\r\n", "New ", "line"])
     }
 }
 
@@ -93,5 +93,19 @@ struct Game: Codable, Equatable, Mergeable {
         var theirs = base
         theirs.wins += 1
         #expect(try ours.merging(theirs, base: base).wins == 5)
+    }
+}
+
+@Suite struct StrategyTypeTests {
+    struct Mixed: Codable, Mergeable {
+        @Merged(.maximum) var level = Level(number: 1)
+    }
+
+    @Test func maxOnAStructIsAConflict() {
+        var ours = Mixed()
+        ours.level = Level(number: 2)
+        var theirs = Mixed()
+        theirs.level = Level(number: 3)
+        #expect(throws: MergeConflict<Mixed>.self) { try ours.merging(theirs, base: Mixed()) }
     }
 }

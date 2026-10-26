@@ -2,8 +2,9 @@
 /// different places, such as an `Int` that's a counter in one and a high score in another. A strategy
 /// decides only when both sides changed the property.
 ///
-/// Implement the three-way merge, and the two-way merge too if the strategy needs no ancestor. The
-/// standard strategies, such as `.max`, are in `StandardMerge`.
+/// Implement the three-way merge, and the two-way merge too if the strategy needs no ancestor. A typed
+/// strategy's value is the property's type. A strategy whose value is `Snapshot` merges any property by its
+/// stored form, as the standard ones such as `.maximum` do.
 ///
 /// ```swift
 /// struct LongerMerge: MergeStrategy {

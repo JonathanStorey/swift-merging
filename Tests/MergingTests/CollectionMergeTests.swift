@@ -75,7 +75,7 @@ struct Board: Codable, Equatable, Mergeable {
     }
 
     @Test func canonicalTextSortsKeys() {
-        let one = Snapshot.object(["b": .int(1), "a": .string("x")])
+        let one = MergeTree.object(["b": .int(1), "a": .string("x")])
         #expect(one.canonical == #"{"a":"x","b":i1}"#)
     }
 }

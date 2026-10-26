@@ -22,10 +22,10 @@ extension Dictionary: MergeRuled where Key: Codable, Value: Codable {
         MergeRule(Dictionary.self) { ours, theirs, base in
             var keys = KeyTable()
             let mine = try keys.object(ours), other = try keys.object(theirs)
-            let merged: Snapshot = if let base {
-                try Snapshot.object(mine).merging(.object(other), base: .object(keys.object(base)))
+            let merged: MergeTree = if let base {
+                try MergeTree.object(mine).merging(.object(other), base: .object(keys.object(base)))
             } else {
-                try Snapshot.object(mine).merging(.object(other))
+                try MergeTree.object(mine).merging(.object(other))
             }
             guard case .object(let object) = merged else { throw Unequal() }
             let decoder = SnapshotDecoder()
@@ -40,8 +40,8 @@ extension Dictionary: MergeRuled where Key: Codable, Value: Codable {
         var keys: [String: Key] = [:]
         let encoder = SnapshotEncoder(isPart: true)
 
-        mutating func object(_ dictionary: Dictionary) throws -> [String: Snapshot] {
-            var object: [String: Snapshot] = [:]
+        mutating func object(_ dictionary: Dictionary) throws -> [String: MergeTree] {
+            var object: [String: MergeTree] = [:]
             for (key, value) in dictionary {
                 let text = try encoder.encode(key).canonical
                 keys[text] = key
@@ -55,7 +55,7 @@ extension Dictionary: MergeRuled where Key: Codable, Value: Codable {
 /// Thrown inside a rule, which reports it as a conflict of the whole set or dictionary.
 private struct Unequal: Error {}
 
-extension Snapshot {
+extension MergeTree {
     /// Text that's the same for equal snapshots and different for different ones, with object keys sorted.
     var canonical: String {
         switch self {

@@ -1,10 +1,10 @@
-/// Encodes a value as a `Snapshot`.
+/// Encodes a value as a `MergeTree`.
 struct SnapshotEncoder {
     /// Whether the value is part of a larger one, so a `Mergeable` value brings its own merge. The value
     /// being merged leaves it off, or its merge would call itself.
     var isPart = false
 
-    func encode<T: Encodable>(_ value: T) throws -> Snapshot {
+    func encode<T: Encodable>(_ value: T) throws -> MergeTree {
         let node = Node(codingPath: [], isPart: isPart)
         try node.store(value)
         return node.snapshot
@@ -16,7 +16,7 @@ struct SnapshotEncoder {
 private final class Node: Encoder {
     let codingPath: [any CodingKey]
     var userInfo: [CodingUserInfoKey: Any] { [:] }
-    private var value: Snapshot?
+    private var value: MergeTree?
     private var rule: MergeRule?
     private var keyed: [String: Node]?
     private var unkeyed: [Node]?
@@ -27,17 +27,17 @@ private final class Node: Encoder {
         self.isPart = isPart
     }
 
-    var snapshot: Snapshot {
-        let data: Snapshot = if let keyed { .object(keyed.mapValues(\.snapshot)) } else if let unkeyed { .array(unkeyed.map(\.snapshot)) } else { value ?? .null }
+    var snapshot: MergeTree {
+        let data: MergeTree = if let keyed { .object(keyed.mapValues(\.snapshot)) } else if let unkeyed { .array(unkeyed.map(\.snapshot)) } else { value ?? .null }
         return rule.map { .merged(data, $0) } ?? data
     }
 
-    func store(_ value: Snapshot) { self.value = value }
+    func store(_ value: MergeTree) { self.value = value }
     func store(_ value: Bool) { self.value = .bool(value) }
     func store(_ value: String) { self.value = .string(value) }
     func store(_ value: Double) { self.value = .double(value) }
     func store(_ value: Float) { self.value = .double(Double(value)) }
-    func store<T: FixedWidthInteger & Encodable>(_ value: T) { self.value = Snapshot(value) }
+    func store<T: FixedWidthInteger & Encodable>(_ value: T) { self.value = MergeTree(value) }
     /// Stores a value, with the rule it merges by: a `@Merged` strategy, a set's or dictionary's, or, for a
     /// part of a value, a `Mergeable` type's own merge.
     func store<T: Encodable>(_ value: T) throws {

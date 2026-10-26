@@ -1,17 +1,17 @@
-/// Decodes a value from a `Snapshot`.
+/// Decodes a value from a `MergeTree`.
 struct SnapshotDecoder {
-    func decode<T: Decodable>(_ type: T.Type, from snapshot: Snapshot) throws -> T {
+    func decode<T: Decodable>(_ type: T.Type, from snapshot: MergeTree) throws -> T {
         try Reader(snapshot, codingPath: []).read(type)
     }
 }
 
 /// The decoder for one value in a snapshot.
 private struct Reader: Decoder {
-    let snapshot: Snapshot
+    let snapshot: MergeTree
     let codingPath: [any CodingKey]
     var userInfo: [CodingUserInfoKey: Any] { [:] }
 
-    init(_ snapshot: Snapshot, codingPath: [any CodingKey]) {
+    init(_ snapshot: MergeTree, codingPath: [any CodingKey]) {
         var snapshot = snapshot
         while case .merged(let data, _) = snapshot { snapshot = data }
         self.snapshot = snapshot
@@ -95,7 +95,7 @@ extension Reader: SingleValueDecodingContainer {
 }
 
 private struct KeyedContainer<Key: CodingKey>: KeyedDecodingContainerProtocol {
-    let object: [String: Snapshot]
+    let object: [String: MergeTree]
     let codingPath: [any CodingKey]
 
     var allKeys: [Key] { object.keys.compactMap(Key.init(stringValue:)) }
@@ -139,11 +139,11 @@ private struct KeyedContainer<Key: CodingKey>: KeyedDecodingContainerProtocol {
 }
 
 private struct UnkeyedContainer: UnkeyedDecodingContainer {
-    let array: [Snapshot]
+    let array: [MergeTree]
     let codingPath: [any CodingKey]
     var currentIndex = 0
 
-    init(array: [Snapshot], codingPath: [any CodingKey]) {
+    init(array: [MergeTree], codingPath: [any CodingKey]) {
         self.array = array
         self.codingPath = codingPath
     }

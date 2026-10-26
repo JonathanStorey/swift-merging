@@ -157,3 +157,27 @@ struct Team: Codable, Mergeable {
         #expect(try ours.merging(theirs, base: base) == .array([.string("a"), .string("B"), .string("c")]))
     }
 }
+
+@Suite struct PublicSnapshotTests {
+    struct Point: Codable, Equatable {
+        var x: Int
+        var y: Double
+        var name: String?
+    }
+
+    @Test func aSnapshotShowsWhatItHolds() throws {
+        let snapshot = try Snapshot(encoding: Point(x: 1, y: 2.5, name: "A"))
+        #expect(snapshot["x"]?.int == 1)
+        #expect(snapshot["y"]?.double == 2.5)
+        #expect(snapshot["name"]?.string == "A")
+        #expect(snapshot.description == #"{"name": "A", "x": 1, "y": 2.5}"#)
+        #expect(try snapshot.decode(as: Point.self) == Point(x: 1, y: 2.5, name: "A"))
+    }
+
+    @Test func literalsBuildSnapshots() {
+        let snapshot: Snapshot = ["tags": ["a", 1, 2.5, true, nil]]
+        #expect(snapshot["tags"]?[1] == .int(1))
+        #expect(snapshot["tags"]?[4]?.isNull == true)
+        #expect(snapshot["missing"] == nil)
+    }
+}

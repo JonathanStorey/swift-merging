@@ -9,7 +9,7 @@ import Merging
 struct Note: Codable, Mergeable {
     var title = ""                                  // keeps the side that changed
     var address = Address()                         // merges by Address's own merge, if it has one
-    @Merged(.max) var highScore = 0                 // keeps the larger when both changed
+    @Merged(.maximum) var highScore = 0                 // keeps the larger when both changed
 }
 
 var draft = mine
@@ -55,12 +55,11 @@ The snapshot merge encodes and decodes on every merge, which suits syncing rathe
 
 ## Strategies
 
-The standard strategies take dot syntax, and each is declared only for the types it suits, so
-`@Merged(.byWord) var count = 0` doesn't compile:
+The standard strategies take dot syntax:
 
 ```swift
 struct Game: Codable, Mergeable {
-    @Merged(.max) var highScore = 0                 // the larger, by the type's own <
+    @Merged(.maximum) var highScore = 0             // the larger number, text, or date
     @Merged(.adding) var wins = 0                   // a counter: both sides' increments count
     @Merged(.trueWins) var flagged = false          // a flag anyone can set
     @Merged(.byWord) var note = ""                  // edits to different words combine
@@ -68,24 +67,37 @@ struct Game: Codable, Mergeable {
 ```
 
 A strategy decides only when both sides changed a property, even to the same value, so two increments of
-a counter both count. `.max` and `.trueWins` also merge without a base. `.adding` and `.byWord` need one.
+a counter both count. `.maximum` and `.trueWins` also merge without a base. `.adding` and `.byWord` need one.
 
-A custom strategy implements the three-way merge, and the two-way merge too if it needs no ancestor. It's
-made with `init()` when a value decodes, so it holds no settings of its own.
+The standard strategies work on a property's `Snapshot`, its stored form, so they fit any type that
+stores the right kind of data. A mismatch, such as `.byWord` on a number, is a conflict when it merges.
+
+A strategy of your own can be typed, working on the property's own type:
 
 ```swift
-struct LongerMerge: MergeStrategy {
-    typealias Value = String
-
-    func merge(base: String, ours: String, theirs: String) -> String {
-        ours.count >= theirs.count ? ours : theirs
-    }
+struct Higher<Value: Comparable & Sendable>: MergeStrategy {
+    func merge(base: Value, ours: Value, theirs: Value) -> Value { max(ours, theirs) }
+    func merge(ours: Value, theirs: Value) -> Value { max(ours, theirs) }
 }
 
-@Merged(LongerMerge()) var title = ""
+@Merged(Higher()) var level = Level(number: 1)      // uses Level's own <
 ```
 
-A non-generic strategy whose merge doesn't throw names its value with `typealias Value`.
+It implements the three-way merge, and the two-way merge too if it needs no ancestor. It's made with
+`init()` when a value decodes, so it holds no settings of its own. A non-generic strategy whose merge
+doesn't throw names its value with `typealias Value`.
+
+## Snapshot
+
+`Snapshot` is a value's stored form, as JSON would hold it: `null`, `bool`, `int`, `uint`, `double`,
+`string`, `array`, or `object`.
+
+```swift
+let snapshot = try Snapshot(encoding: point)      // {"x": 1, "y": 2.5}
+snapshot["x"]?.int                                // 1
+let copy = try snapshot.decode(as: Point.self)
+let literal: Snapshot = ["tags": ["a", "b"], "count": 2]
+```
 
 ## Requirements
 
