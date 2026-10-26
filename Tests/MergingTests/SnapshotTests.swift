@@ -134,3 +134,26 @@ struct Profile: Codable, Equatable, Mergeable {
 struct Team: Codable, Mergeable {
     var lead = Profile()
 }
+
+@Suite struct SnapshotArrayMergeTests {
+    @Test func bothReplacingAnElementDifferentlyIsAConflictNamingIt() {
+        let base = Snapshot.array([.string("a"), .string("b")])
+        let ours = Snapshot.array([.string("a"), .string("x")])
+        let theirs = Snapshot.array([.string("a"), .string("y")])
+        do {
+            _ = try ours.merging(theirs, base: base)
+            Issue.record("Expected a conflict")
+        } catch {
+            #expect(error.base == .string("b"))
+            #expect(error.ours == .string("x"))
+            #expect(error.theirs == .string("y"))
+        }
+    }
+
+    @Test func oneSideChangingAndTheOtherRemovingKeepsTheChange() throws {
+        let base = Snapshot.array([.string("a"), .string("b"), .string("c")])
+        let ours = Snapshot.array([.string("a"), .string("B"), .string("c")])
+        let theirs = Snapshot.array([.string("a"), .string("c")])
+        #expect(try ours.merging(theirs, base: base) == .array([.string("a"), .string("B"), .string("c")]))
+    }
+}

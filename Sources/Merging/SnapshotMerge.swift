@@ -1,23 +1,22 @@
-/// Two versions of part of a snapshot that couldn't be merged.
-struct SnapshotConflict: Error {}
-
-extension Snapshot {
+/// A snapshot merges like any other value, and a conflict holds the part that clashed, with an absent
+/// object key shown as `null`.
+extension Snapshot: Mergeable {
     /// Merges `theirs` into this snapshot, which is ours, knowing their common ancestor. A part only one side
     /// changed keeps that side. Where both did, a part with a rule merges by it, objects merge key by key and
     /// arrays element by element, and anything else is a conflict.
-    func merging(_ theirs: Snapshot, base: Snapshot) throws(SnapshotConflict) -> Snapshot {
+    func merging(_ theirs: Snapshot, base: Snapshot) throws(MergeConflict<Snapshot>) -> Snapshot {
         if self == theirs || theirs == base { return self }
         if self == base { return theirs }
         switch (self, theirs, base) {
         case let (.merged(ours, rule), .merged(theirs, _), .merged(base, _)): return .merged(try rule.merge(ours, theirs, base), rule)
         case let (.object(ours), .object(theirs), .object(base)): return .object(try Self.merge(ours, theirs, base: base))
         case let (.array(ours), .array(theirs), .array(base)): return .array(try Self.merge(ours, theirs, base: base))
-        default: throw SnapshotConflict()
+        default: throw MergeConflict(base: base, ours: self, theirs: theirs)
         }
     }
 
     /// Merges without a common ancestor, so only what's equal, or what has a rule for merging without one.
-    func merging(_ theirs: Snapshot) throws(SnapshotConflict) -> Snapshot {
+    func merging(_ theirs: Snapshot) throws(MergeConflict<Snapshot>) -> Snapshot {
         if self == theirs { return self }
         switch (self, theirs) {
         case let (.merged(ours, rule), .merged(theirs, _)):
@@ -31,7 +30,7 @@ extension Snapshot {
             for (value, other) in zip(ours, theirs) { merged.append(try value.merging(other)) }
             return .array(merged)
         default:
-            throw SnapshotConflict()
+            throw MergeConflict(ours: self, theirs: theirs)
         }
     }
 
@@ -39,7 +38,7 @@ extension Snapshot {
     /// the other changed it is a conflict.
     private static func merge(
         _ ours: [String: Snapshot], _ theirs: [String: Snapshot], base: [String: Snapshot]
-    ) throws(SnapshotConflict) -> [String: Snapshot] {
+    ) throws(MergeConflict<Snapshot>) -> [String: Snapshot] {
         var merged: [String: Snapshot] = [:]
         for key in Set(ours.keys).union(theirs.keys).union(base.keys) {
             let (mine, other, original) = (ours[key], theirs[key], base[key])
@@ -54,7 +53,7 @@ extension Snapshot {
                     merged[key] = try mine.merging(other)
                 }
             } else {
-                throw SnapshotConflict()
+                throw MergeConflict(base: original, ours: mine ?? .null, theirs: other ?? .null)
             }
         }
         return merged
@@ -63,7 +62,7 @@ extension Snapshot {
     /// Merges element by element, like a three-way merge of lines. An element either side removed is removed,
     /// and what each side inserted goes where it was inserted, ours first. Where both sides replaced the same
     /// element with one element each, those two merge; any other replacement both sides made is a conflict.
-    private static func merge(_ ours: [Snapshot], _ theirs: [Snapshot], base: [Snapshot]) throws(SnapshotConflict) -> [Snapshot] {
+    private static func merge(_ ours: [Snapshot], _ theirs: [Snapshot], base: [Snapshot]) throws(MergeConflict<Snapshot>) -> [Snapshot] {
         let mine = Edits(ours, from: base)
         let other = Edits(theirs, from: base)
         var merged: [Snapshot] = []
@@ -75,7 +74,9 @@ extension Snapshot {
                 merged += theirsInserted
             } else if index < base.count, mine.removed.contains(index), other.removed.contains(index) {
                 // Both replaced the element that follows.
-                guard inserted.count == 1, theirsInserted.count == 1 else { throw SnapshotConflict() }
+                guard inserted.count == 1, theirsInserted.count == 1 else {
+                    throw MergeConflict(base: base[index], ours: .array(inserted), theirs: .array(theirsInserted))
+                }
                 merged.append(try inserted[0].merging(theirsInserted[0], base: base[index]))
             } else {
                 merged += inserted + theirsInserted

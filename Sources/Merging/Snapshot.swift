@@ -25,17 +25,17 @@ extension Snapshot {
 /// equality, so two snapshots are equal when their data is.
 struct MergeRule: Sendable, Equatable {
     /// Merges ours, theirs, and the base when there is one.
-    let merge: @Sendable (Snapshot, Snapshot, Snapshot?) throws(SnapshotConflict) -> Snapshot
+    let merge: @Sendable (Snapshot, Snapshot, Snapshot?) throws(MergeConflict<Snapshot>) -> Snapshot
 
     init<Value: Codable>(_ type: Value.Type, merge: @escaping @Sendable (Value, Value, Value?) throws -> Value) {
-        self.merge = { ours, theirs, base throws(SnapshotConflict) in
+        self.merge = { ours, theirs, base throws(MergeConflict<Snapshot>) in
             do {
                 let decoder = SnapshotDecoder()
                 let original = try base.map { try decoder.decode(Value.self, from: $0) }
                 let merged = try merge(decoder.decode(Value.self, from: ours), decoder.decode(Value.self, from: theirs), original)
                 return try SnapshotEncoder().encode(merged)
             } catch {
-                throw SnapshotConflict()
+                throw MergeConflict(base: base, ours: ours, theirs: theirs)
             }
         }
     }

@@ -8,7 +8,7 @@ extension Set: MergeRuled where Element: Codable {
     var mergeRule: MergeRule {
         MergeRule(Set.self) { ours, theirs, base in
             guard let base else {
-                guard ours == theirs else { throw SnapshotConflict() }
+                guard ours == theirs else { throw Unequal() }
                 return ours
             }
             return ours.intersection(theirs).union(ours.subtracting(base)).union(theirs.subtracting(base))
@@ -27,7 +27,7 @@ extension Dictionary: MergeRuled where Key: Codable, Value: Codable {
             } else {
                 try Snapshot.object(mine).merging(.object(other))
             }
-            guard case .object(let object) = merged else { throw SnapshotConflict() }
+            guard case .object(let object) = merged else { throw Unequal() }
             let decoder = SnapshotDecoder()
             var result: Dictionary = [:]
             for (key, value) in object { result[keys.keys[key]!] = try decoder.decode(Value.self, from: value) }
@@ -51,6 +51,9 @@ extension Dictionary: MergeRuled where Key: Codable, Value: Codable {
         }
     }
 }
+
+/// Thrown inside a rule, which reports it as a conflict of the whole set or dictionary.
+private struct Unequal: Error {}
 
 extension Snapshot {
     /// Text that's the same for equal snapshots and different for different ones, with object keys sorted.
