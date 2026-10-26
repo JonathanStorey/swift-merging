@@ -22,11 +22,7 @@ jobs:
 
   linux:
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        # The oldest supported Swift, for Swift Testing and typed throws, and the current one.
-        swift: ["6.0", "6.1"]
-    container: swift:${{ matrix.swift }}-noble
+    container: swift:6.1-noble
     steps:
       - uses: actions/checkout@v5
       - name: Build and test

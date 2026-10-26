@@ -35,7 +35,7 @@ argument is type-checked on its own, without the property's type.
 
 ## Requirements
 
-Swift 6.0 or later, for typed throws and Swift Testing. iOS 17, macOS 14, tvOS 17, watchOS 10 and
+Swift 6.1 (Xcode 16.3) or later, for typed throws and Swift Testing. iOS 17, macOS 14, tvOS 17, watchOS 10 and
 visionOS 1, or Linux.
 
 ```swift
