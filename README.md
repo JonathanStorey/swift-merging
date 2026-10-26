@@ -13,12 +13,14 @@ struct Note {
     @Merged(MaxMerge<Int>()) var highScore = 0
 }
 
-let merged = try Note.merge(base: original, ours: mine, theirs: yours)
+var draft = mine
+try draft.merge(yours, base: original)         // or draft.merging(yours, base: original)
 ```
 
 `Mergeable` is the main protocol: a type merges with `merge(ours:theirs:)`, and `merge(base:ours:theirs:)`
 uses it unless the type writes its own. A merge throws a `MergeConflict` holding the versions when it
-can't merge them.
+can't merge them. On any value, `merge(_:base:)` and `merging(_:base:)` treat the value as ours, and use
+the two-way merge when there's no base.
 
 `@Mergeable` writes both for a struct, one stored `var` at a time:
 

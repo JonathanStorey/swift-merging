@@ -23,6 +23,16 @@ extension Mergeable {
     public static func merge(base: Self, ours: Self, theirs: Self) throws(MergeConflict<Self>) -> Self {
         try merge(ours: ours, theirs: theirs)
     }
+    /// Merges `theirs` into this value, which is ours, using the three-way merge when `base` is known.
+    /// On a conflict the value is left unchanged.
+    public mutating func merge(_ theirs: Self, base: Self? = nil) throws(MergeConflict<Self>) {
+        self = try merging(theirs, base: base)
+    }
+
+    /// This value, which is ours, merged with `theirs`, using the three-way merge when `base` is known.
+    public func merging(_ theirs: Self, base: Self? = nil) throws(MergeConflict<Self>) -> Self {
+        if let base { try Self.merge(base: base, ours: self, theirs: theirs) } else { try Self.merge(ours: self, theirs: theirs) }
+    }
 }
 
 /// Makes a struct `Mergeable` by merging each stored `var`: with its `@Merged` strategy, else its type's

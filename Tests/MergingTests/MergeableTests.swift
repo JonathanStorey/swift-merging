@@ -13,7 +13,7 @@ struct Address: Equatable {
 }
 
 @Mergeable
-struct Player {
+struct Player: Equatable {
     let id: Int
     var name = ""
     var address = Address()
@@ -63,6 +63,27 @@ struct Player {
             #expect(error.ours.name == "Ana B")
             #expect(error.theirs.name == "Ana C")
         }
+    }
+
+    @Test func anInstanceMergesIntoItselfAsOurs() throws {
+        var ours = base
+        ours.name = "Ana B"
+        var theirs = base
+        theirs.address.city = "Bergen"
+        #expect(try ours.merging(theirs, base: base) == Player.merge(base: base, ours: ours, theirs: theirs))
+        try ours.merge(theirs, base: base)
+        #expect(ours.name == "Ana B")
+        #expect(ours.address.city == "Bergen")
+    }
+
+    @Test func aConflictLeavesTheInstanceUnchanged() {
+        var ours = base
+        ours.name = "Ana B"
+        let before = ours
+        var theirs = base
+        theirs.name = "Ana C"
+        #expect(throws: MergeConflict<Player>.self) { try ours.merge(theirs, base: base) }
+        #expect(ours == before)
     }
 
     @Test func twoWayMergesOnlyWhatsEqual() throws {
