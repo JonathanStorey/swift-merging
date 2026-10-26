@@ -63,8 +63,11 @@ struct Game: Codable, Mergeable {
     @Merged(.adding) var wins = 0                   // a counter: both sides' increments count
     @Merged(.trueWins) var flagged = false          // a flag anyone can set
     @Merged(.byWord) var note = ""                  // edits to different words combine
+    @Merged(.asSet) var tags: [String] = []         // an array merged as a set, ignoring order
 }
 ```
+
+Sets merge like `.asSet` and dictionaries by key (`.byKey`) without naming a strategy.
 
 A strategy decides only when both sides changed a property, even to the same value, so two increments of
 a counter both count. `.maximum` and `.trueWins` also merge without a base. `.adding` and `.byWord` need one.
@@ -86,6 +89,9 @@ struct Higher<Value: Comparable & Sendable>: MergeStrategy {
 It implements the three-way merge, and the two-way merge too if it needs no ancestor. It's made with
 `init()` when a value decodes, so it holds no settings of its own. A non-generic strategy whose merge
 doesn't throw names its value with `typealias Value`.
+
+On Swift 6.1, a generic strategy that throws a conflict of a collection type, such as
+`MergeConflict<Set<Element>>`, crashes the compiler. Swift 6.2 fixes it.
 
 ## Snapshot
 

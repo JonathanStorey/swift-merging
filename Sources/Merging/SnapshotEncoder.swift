@@ -44,6 +44,8 @@ private final class Node: Encoder {
         try value.encode(to: self)
         if let ruled = value as? any MergeRuled {
             rule = ruled.mergeRule
+        } else if let defaulted = value as? any DefaultMergeRule {
+            rule = type(of: defaulted).defaultMergeRule
         } else if isPart, let mergeable = value as? any Mergeable & Codable {
             rule = Self.rule(for: mergeable)
         }

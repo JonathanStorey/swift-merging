@@ -79,3 +79,26 @@ struct Board: Codable, Equatable, Mergeable {
         #expect(one.canonical == #"{"a":"x","b":i1}"#)
     }
 }
+
+@Suite struct CollectionStrategyTests {
+    struct Note: Codable, Equatable, Mergeable {
+        @Merged(.asSet) var tags = ["a", "b", "c"]
+        @Merged(.byKey) var scores: [Spot: Int] = [Spot(x: 0, y: 0): 1]
+    }
+
+    @Test func anArrayMergesAsASet() throws {
+        var ours = Note()
+        ours.tags = ["c", "a", "ours"]
+        var theirs = Note()
+        theirs.tags = ["b", "a", "c", "theirs"].filter { $0 != "c" }
+        #expect(try ours.merging(theirs, base: Note()).tags == ["a", "ours", "theirs"])
+    }
+
+    @Test func aDictionaryMergesByKeyWhenNamed() throws {
+        var ours = Note()
+        ours.scores[Spot(x: 1, y: 1)] = 2
+        var theirs = Note()
+        theirs.scores[Spot(x: 0, y: 0)] = 5
+        #expect(try ours.merging(theirs, base: Note()).scores == [Spot(x: 0, y: 0): 5, Spot(x: 1, y: 1): 2])
+    }
+}

@@ -20,6 +20,24 @@ extension MergeTree {
     }
 }
 
+extension MergeTree {
+    /// Text that's the same for equal snapshots and different for different ones, with object keys sorted.
+    var canonical: String {
+        switch self {
+        case .null: "null"
+        case .bool(let value): "\(value)"
+        case .int(let value): "i\(value)"
+        case .uint(let value): "u\(value)"
+        case .double(let value): "d\(value)"
+        case .string(let value): value.debugDescription
+        case .array(let values): "[" + values.map(\.canonical).joined(separator: ",") + "]"
+        case .object(let object):
+            "{" + object.keys.sorted().map { $0.debugDescription + ":" + object[$0]!.canonical }.joined(separator: ",") + "}"
+        case .merged(let data, _): data.canonical
+        }
+    }
+}
+
 /// How part of a tree merges when it isn't by its shape: a `@Merged` strategy, or a nested `Mergeable`
 /// type's own merge. It decodes the versions, merges them, and encodes the result. Rules don't take part in
 /// equality, so two snapshots are equal when their data is.
@@ -27,7 +45,7 @@ struct MergeRule: Sendable, Equatable {
     /// Merges ours, theirs, and the base when there is one.
     let merge: @Sendable (MergeTree, MergeTree, MergeTree?) throws(MergeConflict<MergeTree>) -> MergeTree
 
-    init<Value: Codable>(_ type: Value.Type, merge: @escaping @Sendable (Value, Value, Value?) throws -> Value) {
+    init<Value: Codable & Sendable>(_ type: Value.Type, merge: @escaping @Sendable (Value, Value, Value?) throws -> Value) {
         self.merge = { ours, theirs, base throws(MergeConflict<MergeTree>) in
             do {
                 let decoder = SnapshotDecoder()
@@ -50,6 +68,11 @@ struct MergeRule: Sendable, Equatable {
 /// A value that brings its own `MergeRule` to the snapshot it encodes into.
 protocol MergeRuled {
     var mergeRule: MergeRule { get }
+}
+
+/// A type whose values all merge by one rule unless their property names a strategy, such as `Set`.
+protocol DefaultMergeRule {
+    static var defaultMergeRule: MergeRule { get }
 }
 
 /// A key for an array element, or for a superclass's or other key-less part of a value.
