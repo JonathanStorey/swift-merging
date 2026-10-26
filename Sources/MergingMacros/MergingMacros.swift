@@ -4,7 +4,7 @@ import SwiftSyntax
 import SwiftSyntaxMacros
 
 /// `@Mergeable`: conforms a struct to `Mergeable`, merging each stored `var` with its `@Merged` strategy or
-/// by its type. A `merge` the struct declares itself is left alone, and `mergeProperties` is always added.
+/// by its type. A struct that declares its own `merge` is an error, since the macro owns both.
 public struct MergeableMacro: ExtensionMacro {
     public static func expansion(
         of node: AttributeSyntax, attachedTo declaration: some DeclGroupSyntax, providingExtensionsOf type: some TypeSyntaxProtocol,
@@ -12,6 +12,13 @@ public struct MergeableMacro: ExtensionMacro {
     ) throws -> [ExtensionDeclSyntax] {
         guard declaration.is(StructDeclSyntax.self) else {
             context.diagnose(Diagnostic(node: node, message: MergingMessage.notStruct))
+            return []
+        }
+        if declares(declaration, labels: ["ours", "theirs"]) || declares(declaration, labels: ["base", "ours", "theirs"]) {
+            context.diagnose(Diagnostic(
+                node: node, message: MergingMessage.declaresMerge,
+                fixIt: FixIt(message: RemoveMergeable(), changes: [.replace(oldNode: Syntax(node), newNode: Syntax(TokenSyntax.unknown("")))])
+            ))
             return []
         }
         let name = type.trimmedDescription
@@ -33,7 +40,7 @@ public struct MergeableMacro: ExtensionMacro {
         }
 
         // Lines at their final indentation, since interpolated text keeps its own.
-        var body = ["    \(access)static func mergeProperties(base: \(name)?, ours: \(name), theirs: \(name)) throws(MergeConflict<\(name)>) -> \(name) {"]
+        var body = ["    private static func mergeProperties(base: \(name)?, ours: \(name), theirs: \(name)) throws(MergeConflict<\(name)>) -> \(name) {"]
         if merges.isEmpty {
             body.append("        return ours")
         } else {
@@ -47,22 +54,19 @@ public struct MergeableMacro: ExtensionMacro {
         }
         body.append("    }")
 
-        var functions: [[String]] = []
-        if !declares(declaration, labels: ["ours", "theirs"]) {
-            functions.append([
+        let functions: [[String]] = [
+            [
                 "    \(access)static func merge(ours: \(name), theirs: \(name)) throws(MergeConflict<\(name)>) -> \(name) {",
                 "        try mergeProperties(base: nil, ours: ours, theirs: theirs)",
                 "    }",
-            ])
-        }
-        if !declares(declaration, labels: ["base", "ours", "theirs"]) {
-            functions.append([
+            ],
+            [
                 "    \(access)static func merge(base: \(name), ours: \(name), theirs: \(name)) throws(MergeConflict<\(name)>) -> \(name) {",
                 "        try mergeProperties(base: base, ours: ours, theirs: theirs)",
                 "    }",
-            ])
-        }
-        functions.append(["    /// Merges each stored property, and throws if any of them can't merge."] + body)
+            ],
+            body,
+        ]
         let conformance = protocols.isEmpty ? "" : ": Mergeable"
         let lines = ["extension \(name)\(conformance) {"] + Array(functions.joined(separator: [""])) + ["}"]
         let source = DeclSyntax(stringLiteral: lines.joined(separator: "\n"))
@@ -119,17 +123,24 @@ enum MergingMessage: String, DiagnosticMessage {
     case notStruct
     case notStoredVar
     case outsideMergeable
+    case declaresMerge
 
     var message: String {
         switch self {
         case .notStruct: "@Mergeable applies to a struct"
         case .notStoredVar: "@Merged applies to one stored 'var' property"
         case .outsideMergeable: "@Merged needs its type to be @Mergeable"
+        case .declaresMerge: "@Mergeable writes merge for you. Remove @Mergeable to write your own"
         }
     }
 
     var diagnosticID: MessageID { MessageID(domain: "Merging", id: rawValue) }
     var severity: DiagnosticSeverity { .error }
+}
+
+struct RemoveMergeable: FixItMessage {
+    var message: String { "Remove @Mergeable" }
+    var fixItID: MessageID { MessageID(domain: "Merging", id: "removeMergeable") }
 }
 
 @main

@@ -74,26 +74,22 @@ struct Player {
     }
 }
 
-/// A type that writes its own merge, and settles only what merging its properties couldn't.
-@Mergeable
-struct Booking {
+/// A type that merges as a whole, written by hand.
+struct Booking: Mergeable {
     var note = ""
     var confirmed = false
 
-    static func merge(base: Booking, ours: Booking, theirs: Booking) throws(MergeConflict<Booking>) -> Booking {
-        do {
-            return try mergeProperties(base: base, ours: ours, theirs: theirs)
-        } catch {
-            return ours.confirmed ? ours : theirs
-        }
+    static func merge(ours: Booking, theirs: Booking) throws(MergeConflict<Booking>) -> Booking {
+        ours.confirmed ? ours : theirs
     }
 }
 
-@Suite struct CustomMergeTests {
-    @Test func aConfirmedBookingWinsAClash() throws {
+@Suite struct HandWrittenMergeTests {
+    @Test func aConfirmedBookingWins() throws {
         let base = Booking(note: "a")
         let ours = Booking(note: "b", confirmed: false)
         let theirs = Booking(note: "c", confirmed: true)
         #expect(try Booking.merge(base: base, ours: ours, theirs: theirs).note == "c")
+        #expect(try Booking.merge(ours: theirs, theirs: ours).note == "c")
     }
 }

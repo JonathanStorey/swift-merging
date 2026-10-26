@@ -36,8 +36,7 @@ import Testing
                     try mergeProperties(base: base, ours: ours, theirs: theirs)
                 }
 
-                /// Merges each stored property, and throws if any of them can't merge.
-                public static func mergeProperties(base: Game?, ours: Game, theirs: Game) throws(MergeConflict<Game>) -> Game {
+                private static func mergeProperties(base: Game?, ours: Game, theirs: Game) throws(MergeConflict<Game>) -> Game {
                     var merged = ours
                     do {
                         merged.title = try _mergeProperty(base: base?.title, ours: ours.title, theirs: theirs.title)
@@ -94,13 +93,38 @@ import Testing
                     try mergeProperties(base: base, ours: ours, theirs: theirs)
                 }
 
-                /// Merges each stored property, and throws if any of them can't merge.
-                static func mergeProperties(base: Game?, ours: Game, theirs: Game) throws(MergeConflict<Game>) -> Game {
+                private static func mergeProperties(base: Game?, ours: Game, theirs: Game) throws(MergeConflict<Game>) -> Game {
                     return ours
                 }
             }
             """,
             diagnostics: [DiagnosticSpec(message: "@Merged applies to one stored 'var' property", line: 3, column: 5)],
+            macroSpecs: macros,
+            failureHandler: { Issue.record("\($0.message)") }
+        )
+    }
+
+    @Test func aStructWritingItsOwnMergeIsAnError() {
+        assertMacroExpansion(
+            """
+            @Mergeable
+            struct Booking {
+                var note = ""
+                static func merge(ours: Booking, theirs: Booking) -> Booking { ours }
+            }
+            """,
+            expandedSource: """
+            struct Booking {
+                var note = ""
+                static func merge(ours: Booking, theirs: Booking) -> Booking { ours }
+            }
+            """,
+            diagnostics: [
+                DiagnosticSpec(
+                    message: "@Mergeable writes merge for you. Remove @Mergeable to write your own", line: 1, column: 1,
+                    fixIts: [FixItSpec(message: "Remove @Mergeable")]
+                )
+            ],
             macroSpecs: macros,
             failureHandler: { Issue.record("\($0.message)") }
         )

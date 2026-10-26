@@ -27,8 +27,23 @@ can't merge them.
 - Otherwise a `Mergeable` property merges by its type's own merge.
 - Otherwise an `Equatable` property keeps the side that changed, and conflicts if both changed it.
 
-A conflict in any property makes the whole value a conflict. To decide those yourself, write your own
-`merge` and call the generated `mergeProperties(base:ours:theirs:)` first.
+A conflict in any property makes the whole value a conflict.
+
+To merge the whole value your own way, leave off `@Mergeable` and conform by hand:
+
+```swift
+struct Booking: Mergeable {
+    var note = ""
+    var confirmed = false
+
+    static func merge(ours: Booking, theirs: Booking) throws(MergeConflict<Booking>) -> Booking {
+        ours.confirmed ? ours : theirs
+    }
+}
+```
+
+The macro merges properties, and a hand-written conformance merges the whole value. The two don't mix:
+a `@Mergeable` struct that declares its own `merge` is a compile error, and so is `@Merged` outside one.
 
 A generic strategy names its value type in `@Merged`, as in `MaxMerge<Int>()`, because a macro's
 argument is type-checked on its own, without the property's type.

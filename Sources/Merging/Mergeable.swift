@@ -12,8 +12,8 @@
 /// }
 /// ```
 ///
-/// Write your own `merge` to decide differently. The macro still adds `mergeProperties(base:ours:theirs:)`,
-/// so yours can merge property by property and settle only what that couldn't.
+/// To merge the whole value your own way, leave off `@Mergeable` and conform by hand. The two don't mix:
+/// a `@Mergeable` struct that declares its own `merge` is an error.
 public protocol Mergeable: Sendable {
     static func merge(ours: Self, theirs: Self) throws(MergeConflict<Self>) -> Self
     static func merge(base: Self, ours: Self, theirs: Self) throws(MergeConflict<Self>) -> Self
@@ -27,7 +27,8 @@ extension Mergeable {
 
 /// Makes a struct `Mergeable` by merging each stored `var`: with its `@Merged` strategy, else its type's
 /// own `Mergeable` merge, else, for an `Equatable` type, by keeping the side that changed. A property
-/// that can't merge makes the whole value a conflict. `let` properties keep `ours`.
+/// that can't merge makes the whole value a conflict. `let` properties keep `ours`. To merge the whole
+/// value another way, conform to `Mergeable` by hand instead.
 @attached(extension, conformances: Mergeable, names: named(merge), named(mergeProperties))
 public macro Mergeable() = #externalMacro(module: "MergingMacros", type: "MergeableMacro")
 
