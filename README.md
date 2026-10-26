@@ -48,6 +48,22 @@ struct Booking: Mergeable {
 The macro merges properties, and a hand-written conformance merges the whole value. The two don't mix:
 a `@Mergeable` struct that declares its own merge is a compile error, and so is `@Merged` outside one.
 
+A `Codable` type gets a merge for free by conforming to `Mergeable` without writing one:
+
+```swift
+struct Settings: Codable, Mergeable {
+    var theme = "light"
+    var favorites: [String] = []
+}
+```
+
+It merges a snapshot of the encoded form, without going through JSON text. Knowing the common
+ancestor, objects merge key by key, arrays element by element (both sides' insertions kept, ours first,
+and two edits to the same element merged), and anything else keeps the side that changed. The result
+must decode, or the merge is a conflict. Without an ancestor there's no telling which side changed, so
+two versions merge only if they're equal. It encodes and decodes on every merge, so `@Mergeable` is
+faster where that matters.
+
 A generic strategy names its value type in `@Merged`, as in `MaxMerge<Int>()`, because a macro's
 argument is type-checked on its own, without the property's type.
 
