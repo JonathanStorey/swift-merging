@@ -1,7 +1,11 @@
 /// Encodes a value as a `Snapshot`.
 struct SnapshotEncoder {
+    /// Whether the value is part of a larger one, so a `Mergeable` value brings its own merge. The value
+    /// being merged leaves it off, or its merge would call itself.
+    var isPart = false
+
     func encode<T: Encodable>(_ value: T) throws -> Snapshot {
-        let node = Node(codingPath: [])
+        let node = Node(codingPath: [], isPart: isPart)
         try node.store(value)
         return node.snapshot
     }
@@ -16,9 +20,11 @@ private final class Node: Encoder {
     private var rule: MergeRule?
     private var keyed: [String: Node]?
     private var unkeyed: [Node]?
+    private let isPart: Bool
 
-    init(codingPath: [any CodingKey]) {
+    init(codingPath: [any CodingKey], isPart: Bool = true) {
         self.codingPath = codingPath
+        self.isPart = isPart
     }
 
     var snapshot: Snapshot {
@@ -32,19 +38,19 @@ private final class Node: Encoder {
     func store(_ value: Double) { self.value = .double(value) }
     func store(_ value: Float) { self.value = .double(Double(value)) }
     func store<T: FixedWidthInteger & Encodable>(_ value: T) { self.value = Snapshot(value) }
-    /// Stores a value, with the rule it merges by: a `@Merged` strategy, or, below the top, a `Mergeable`
-    /// type's own merge.
+    /// Stores a value, with the rule it merges by: a `@Merged` strategy, a set's or dictionary's, or, for a
+    /// part of a value, a `Mergeable` type's own merge.
     func store<T: Encodable>(_ value: T) throws {
         try value.encode(to: self)
         if let ruled = value as? any MergeRuled {
             rule = ruled.mergeRule
-        } else if !codingPath.isEmpty, let mergeable = value as? any Mergeable & Codable {
+        } else if isPart, let mergeable = value as? any Mergeable & Codable {
             rule = Self.rule(for: mergeable)
         }
     }
 
     private static func rule<M: Mergeable & Codable>(for value: M) -> MergeRule {
-        MergeRule(M.self) { ours, theirs, base throws(MergeConflict<M>) in
+        MergeRule(M.self) { ours, theirs, base in
             if let base { try ours.merging(theirs, base: base) } else { try ours.merging(theirs) }
         }
     }

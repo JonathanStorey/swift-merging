@@ -27,9 +27,7 @@ struct MergeRule: Sendable, Equatable {
     /// Merges ours, theirs, and the base when there is one.
     let merge: @Sendable (Snapshot, Snapshot, Snapshot?) throws(SnapshotConflict) -> Snapshot
 
-    init<Value: Codable & Sendable>(
-        _ type: Value.Type, merge: @escaping @Sendable (Value, Value, Value?) throws(MergeConflict<Value>) -> Value
-    ) {
+    init<Value: Codable>(_ type: Value.Type, merge: @escaping @Sendable (Value, Value, Value?) throws -> Value) {
         self.merge = { ours, theirs, base throws(SnapshotConflict) in
             do {
                 let decoder = SnapshotDecoder()

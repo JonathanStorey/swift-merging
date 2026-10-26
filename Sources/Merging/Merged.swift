@@ -41,7 +41,7 @@ extension Merged: Hashable where Strategy.Value: Hashable {
 extension Merged: MergeRuled {
     var mergeRule: MergeRule {
         let strategy = strategy
-        return MergeRule(Strategy.Value.self) { ours, theirs, base throws(MergeConflict<Strategy.Value>) in
+        return MergeRule(Strategy.Value.self) { ours, theirs, base in
             if let base { try strategy.merge(base: base, ours: ours, theirs: theirs) } else { try strategy.merge(ours: ours, theirs: theirs) }
         }
     }

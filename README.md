@@ -30,8 +30,9 @@ There are three ways to conform, from least to most code:
 
 1. **A `Codable` type conforms with no code.** It merges through a snapshot of its encoded form, without
    going through JSON text. A property only one side changed keeps that side. Where both changed it, a
-   `Mergeable` property merges by its type's own merge, an object key by key, an array element by element
-   (both sides' insertions kept, ours first), and anything else is a conflict. The result must decode, or
+   `Mergeable` property merges by its type's own merge, an object or dictionary key by key, an array
+   element by element (both sides' insertions kept, ours first), a set by keeping what either side added
+   and dropping what either removed, and anything else is a conflict. The result must decode, or
    the merge is a conflict. Two-way, only what's equal merges, plus properties that can merge without a
    base.
 2. **`@Merged(_:)` picks a property's `MergeStrategy`**, for a type that merges differently in different
