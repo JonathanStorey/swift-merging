@@ -2,20 +2,41 @@
 struct SnapshotConflict: Error {}
 
 extension Snapshot {
-    /// Merges `theirs` into this snapshot, which is ours, knowing their common ancestor. Objects merge key by
-    /// key and arrays element by element, and anything else keeps the side that changed.
+    /// Merges `theirs` into this snapshot, which is ours, knowing their common ancestor. A part only one side
+    /// changed keeps that side. Where both did, a part with a rule merges by it, objects merge key by key and
+    /// arrays element by element, and anything else is a conflict.
     func merging(_ theirs: Snapshot, base: Snapshot) throws(SnapshotConflict) -> Snapshot {
         if self == theirs || theirs == base { return self }
         if self == base { return theirs }
         switch (self, theirs, base) {
+        case let (.merged(ours, rule), .merged(theirs, _), .merged(base, _)): return .merged(try rule.merge(ours, theirs, base), rule)
         case let (.object(ours), .object(theirs), .object(base)): return .object(try Self.merge(ours, theirs, base: base))
         case let (.array(ours), .array(theirs), .array(base)): return .array(try Self.merge(ours, theirs, base: base))
         default: throw SnapshotConflict()
         }
     }
 
-    /// Merges key by key. Keys both sides added merge without a base, so they must match, and a key one side
-    /// removed while the other changed it is a conflict.
+    /// Merges without a common ancestor, so only what's equal, or what has a rule for merging without one.
+    func merging(_ theirs: Snapshot) throws(SnapshotConflict) -> Snapshot {
+        if self == theirs { return self }
+        switch (self, theirs) {
+        case let (.merged(ours, rule), .merged(theirs, _)):
+            return .merged(try rule.merge(ours, theirs, nil), rule)
+        case let (.object(ours), .object(theirs)) where Set(ours.keys) == Set(theirs.keys):
+            var merged: [String: Snapshot] = [:]
+            for (key, value) in ours { merged[key] = try value.merging(theirs[key]!) }
+            return .object(merged)
+        case let (.array(ours), .array(theirs)) where ours.count == theirs.count:
+            var merged: [Snapshot] = []
+            for (value, other) in zip(ours, theirs) { merged.append(try value.merging(other)) }
+            return .array(merged)
+        default:
+            throw SnapshotConflict()
+        }
+    }
+
+    /// Merges key by key. A key both sides added merges without a base, and a key one side removed while
+    /// the other changed it is a conflict.
     private static func merge(
         _ ours: [String: Snapshot], _ theirs: [String: Snapshot], base: [String: Snapshot]
     ) throws(SnapshotConflict) -> [String: Snapshot] {
@@ -26,8 +47,12 @@ extension Snapshot {
                 merged[key] = mine
             } else if mine == original {
                 merged[key] = other
-            } else if let mine, let other, let original {
-                merged[key] = try mine.merging(other, base: original)
+            } else if let mine, let other {
+                if let original {
+                    merged[key] = try mine.merging(other, base: original)
+                } else {
+                    merged[key] = try mine.merging(other)
+                }
             } else {
                 throw SnapshotConflict()
             }

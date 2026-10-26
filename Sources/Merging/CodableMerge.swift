@@ -1,7 +1,10 @@
-/// A `Codable` type that conforms to `Mergeable` without writing its own merge merges as a snapshot of its
-/// encoded form. Knowing the common ancestor, objects merge key by key, arrays element by element, and
-/// anything else keeps the side that changed. The result must decode, or the merge is a conflict. Without
-/// an ancestor there's no telling which side changed, so the versions merge only if they're equal.
+/// A `Codable` type merges by conforming to `Mergeable`, through a snapshot of its encoded form. Knowing
+/// the common ancestor, a property only one side changed keeps that side. Where both changed it, a `@Merged`
+/// property merges by its strategy, a `Mergeable` one by its type's own merge, an object key by key, an array
+/// element by element, and anything else is a conflict. The result must decode, or the merge is a conflict.
+///
+/// Without an ancestor, only what's equal merges, along with properties whose strategy or type can merge
+/// without one.
 ///
 /// ```swift
 /// struct Settings: Codable, Mergeable {
@@ -10,14 +13,6 @@
 /// }
 /// ```
 extension Mergeable where Self: Codable {
-    public func merging(_ theirs: Self) throws(MergeConflict<Self>) -> Self {
-        let encoder = SnapshotEncoder()
-        guard let ours = try? encoder.encode(self), let other = try? encoder.encode(theirs), ours == other else {
-            throw MergeConflict(ours: self, theirs: theirs)
-        }
-        return self
-    }
-
     public func merging(_ theirs: Self, base: Self) throws(MergeConflict<Self>) -> Self {
         do {
             let encoder = SnapshotEncoder()
@@ -25,6 +20,16 @@ extension Mergeable where Self: Codable {
             return try SnapshotDecoder().decode(Self.self, from: merged)
         } catch {
             throw MergeConflict(base: base, ours: self, theirs: theirs)
+        }
+    }
+
+    public func merging(_ theirs: Self) throws(MergeConflict<Self>) -> Self {
+        do {
+            let encoder = SnapshotEncoder()
+            let merged = try encoder.encode(self).merging(encoder.encode(theirs))
+            return try SnapshotDecoder().decode(Self.self, from: merged)
+        } catch {
+            throw MergeConflict(ours: self, theirs: theirs)
         }
     }
 }

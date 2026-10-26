@@ -18,7 +18,7 @@ jobs:
           SCHEMES=$(xcodebuild -list -json | python3 -c 'import json, sys; print("\n".join(json.load(sys.stdin)["workspace"]["schemes"]))')
           echo "Schemes: $SCHEMES"
           SCHEME=$(echo "$SCHEMES" | grep -x -m1 -e Merging -e swift-merging-Package -e swift-merging || echo "$SCHEMES" | head -1)
-          xcodebuild build -scheme "$SCHEME" -destination 'generic/platform=iOS Simulator' -skipMacroValidation -quiet
+          xcodebuild build -scheme "$SCHEME" -destination 'generic/platform=iOS Simulator' -quiet
 
   linux:
     runs-on: ubuntu-latest

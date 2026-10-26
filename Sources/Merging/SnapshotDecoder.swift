@@ -12,6 +12,8 @@ private struct Reader: Decoder {
     var userInfo: [CodingUserInfoKey: Any] { [:] }
 
     init(_ snapshot: Snapshot, codingPath: [any CodingKey]) {
+        var snapshot = snapshot
+        while case .merged(let data, _) = snapshot { snapshot = data }
         self.snapshot = snapshot
         self.codingPath = codingPath
     }
@@ -160,7 +162,7 @@ private struct UnkeyedContainer: UnkeyedDecodingContainer {
     }
 
     mutating func decodeNil() throws -> Bool {
-        guard !isAtEnd, array[currentIndex] == .null else { return false }
+        guard !isAtEnd, Reader(array[currentIndex], codingPath: codingPath).isNull else { return false }
         currentIndex += 1
         return true
     }

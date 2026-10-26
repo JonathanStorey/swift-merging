@@ -1,28 +1,20 @@
-/// A type whose values merge. Implement `merging(_:)`, which merges `theirs` into this value, which is ours,
-/// and `merging(_:base:)`, which also knows their common ancestor and uses `merging(_:)` by default.
-/// Throwing a `MergeConflict` is the only way to say two versions can't be merged. The mutating `merge`
-/// and the static merges are built on these.
+/// A type whose values merge. Implement `merging(_:base:)`, which merges `theirs` into this value, which is
+/// ours, knowing their common ancestor. Throwing a `MergeConflict` is the only way to say two versions can't
+/// be merged.
 ///
-/// `@Mergeable` writes both for a struct, merging it property by property:
+/// Without an ancestor there's no telling which side changed, so `merging(_:)` throws a conflict unless the
+/// type knows how to merge without one. The mutating `merge` and the static merges are built on these.
 ///
-/// ```swift
-/// @Mergeable
-/// struct Note {
-///     var title = ""                                  // keeps the side that changed
-///     @Merged(MaxMerge<Int>()) var highScore = 0
-/// }
-/// ```
-///
-/// To merge the whole value your own way, leave off `@Mergeable` and conform by hand. The two don't mix:
-/// a `@Mergeable` struct that declares its own merge is an error.
+/// A `Codable` type gets both by conforming, and merges its encoded form property by property. `@Merged`
+/// picks how one property merges. To merge the whole value your own way, write `merging(_:base:)`.
 public protocol Mergeable: Sendable {
-    func merging(_ theirs: Self) throws(MergeConflict<Self>) -> Self
     func merging(_ theirs: Self, base: Self) throws(MergeConflict<Self>) -> Self
+    func merging(_ theirs: Self) throws(MergeConflict<Self>) -> Self
 }
 
 extension Mergeable {
-    public func merging(_ theirs: Self, base: Self) throws(MergeConflict<Self>) -> Self {
-        try merging(theirs)
+    public func merging(_ theirs: Self) throws(MergeConflict<Self>) -> Self {
+        throw MergeConflict(ours: self, theirs: theirs)
     }
 
     /// Merges `theirs` into this value, which is ours. On a conflict the value is left unchanged.
@@ -44,18 +36,3 @@ extension Mergeable {
         try ours.merging(theirs, base: base)
     }
 }
-
-/// Makes a struct `Mergeable` by merging each stored `var`: with its `@Merged` strategy, else its type's
-/// own `Mergeable` merge, else, for an `Equatable` type, by keeping the side that changed. A property
-/// that can't merge makes the whole value a conflict. `let` properties keep `ours`. To merge the whole
-/// value another way, conform to `Mergeable` by hand instead.
-@attached(extension, conformances: Mergeable, names: named(merging))
-public macro Mergeable() = #externalMacro(module: "MergingMacros", type: "MergeableMacro")
-
-/// Picks the strategy one stored property of a `@Mergeable` type merges with.
-///
-/// ```swift
-/// @Merged(MaxMerge()) var highScore = 0
-/// ```
-@attached(peer)
-public macro Merged<Strategy: MergeStrategy>(_ strategy: Strategy) = #externalMacro(module: "MergingMacros", type: "MergedMacro")

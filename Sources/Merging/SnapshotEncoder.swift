@@ -13,6 +13,7 @@ private final class Node: Encoder {
     let codingPath: [any CodingKey]
     var userInfo: [CodingUserInfoKey: Any] { [:] }
     private var value: Snapshot?
+    private var rule: MergeRule?
     private var keyed: [String: Node]?
     private var unkeyed: [Node]?
 
@@ -21,9 +22,8 @@ private final class Node: Encoder {
     }
 
     var snapshot: Snapshot {
-        if let keyed { return .object(keyed.mapValues(\.snapshot)) }
-        if let unkeyed { return .array(unkeyed.map(\.snapshot)) }
-        return value ?? .null
+        let data: Snapshot = if let keyed { .object(keyed.mapValues(\.snapshot)) } else if let unkeyed { .array(unkeyed.map(\.snapshot)) } else { value ?? .null }
+        return rule.map { .merged(data, $0) } ?? data
     }
 
     func store(_ value: Snapshot) { self.value = value }
@@ -32,7 +32,22 @@ private final class Node: Encoder {
     func store(_ value: Double) { self.value = .double(value) }
     func store(_ value: Float) { self.value = .double(Double(value)) }
     func store<T: FixedWidthInteger & Encodable>(_ value: T) { self.value = Snapshot(value) }
-    func store<T: Encodable>(_ value: T) throws { try value.encode(to: self) }
+    /// Stores a value, with the rule it merges by: a `@Merged` strategy, or, below the top, a `Mergeable`
+    /// type's own merge.
+    func store<T: Encodable>(_ value: T) throws {
+        try value.encode(to: self)
+        if let ruled = value as? any MergeRuled {
+            rule = ruled.mergeRule
+        } else if !codingPath.isEmpty, let mergeable = value as? any Mergeable & Codable {
+            rule = Self.rule(for: mergeable)
+        }
+    }
+
+    private static func rule<M: Mergeable & Codable>(for value: M) -> MergeRule {
+        MergeRule(M.self) { ours, theirs, base throws(MergeConflict<M>) in
+            if let base { try ours.merging(theirs, base: base) } else { try ours.merging(theirs) }
+        }
+    }
 
     func child(forKey key: some CodingKey) -> Node {
         if keyed == nil { keyed = [:] }
