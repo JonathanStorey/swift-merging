@@ -64,6 +64,7 @@ struct Game: Codable, Mergeable {
     @Merged(.trueWins) var flagged = false          // a flag anyone can set
     @Merged(.byWord) var note = ""                  // edits to different words combine
     @Merged(.byMembership) var tags: [String] = []  // who's in it, ignoring order
+    @Merged(.union) var recipients: [String] = []   // never loses an addition, even without a base
 }
 ```
 

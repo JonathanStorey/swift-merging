@@ -102,3 +102,30 @@ struct Board: Codable, Equatable, Mergeable {
         #expect(try ours.merging(theirs, base: Note()).scores == [Spot(x: 0, y: 0): 5, Spot(x: 1, y: 1): 2])
     }
 }
+
+@Suite struct UnionMergeTests {
+    struct Mail: Codable, Equatable, Mergeable {
+        @Merged(.union) var recipients = ["ana", "bo"]
+        @Merged(.union) var labels: Set<String> = ["inbox"]
+    }
+
+    @Test func withoutABaseNothingIsLost() throws {
+        var ours = Mail()
+        ours.recipients = ["ana", "cy"]
+        ours.labels = ["inbox", "work"]
+        var theirs = Mail()
+        theirs.recipients = ["bo", "di", "ana"]
+        theirs.labels = ["home"]
+        let merged = try ours.merging(theirs)
+        #expect(merged.recipients == ["ana", "cy", "bo", "di"])
+        #expect(merged.labels == ["inbox", "work", "home"])
+    }
+
+    @Test func withABaseRemovalsStick() throws {
+        var ours = Mail()
+        ours.recipients = ["ana"]
+        var theirs = Mail()
+        theirs.recipients = ["ana", "bo", "cy"]
+        #expect(try ours.merging(theirs, base: Mail()).recipients == ["ana", "cy"])
+    }
+}
