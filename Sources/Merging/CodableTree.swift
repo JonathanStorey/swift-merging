@@ -78,15 +78,43 @@ extension CodableTree {
         return value
     }
 
-    /// The property or entry for `key`, if this is an object that has it.
+    /// The property or entry for `key`, if this is an object that has it. Setting it adds or replaces the
+    /// entry, and setting `nil` removes it. Setting it on anything but an object does nothing.
+    ///
+    /// ```swift
+    /// tree["address"]?["city"] = "Bergen"
+    /// ```
     public subscript(key: String) -> CodableTree? {
-        object?[key]
+        get { object?[key] }
+        set {
+            guard case .object(var object) = self else { return }
+            object[key] = newValue
+            self = .object(object)
+        }
     }
 
-    /// The element at `index`, if this is an array that long.
+    /// The element at `index`, if this is an array that long. Setting it replaces the element, and setting
+    /// `nil` removes it. Setting it outside the array does nothing.
     public subscript(index: Int) -> CodableTree? {
-        guard let array, array.indices.contains(index) else { return nil }
-        return array[index]
+        get {
+            guard let array, array.indices.contains(index) else { return nil }
+            return array[index]
+        }
+        set {
+            guard case .array(var array) = self, array.indices.contains(index) else { return }
+            if let newValue { array[index] = newValue } else { array.remove(at: index) }
+            self = .array(array)
+        }
+    }
+
+    /// The nodes directly inside this one: an array's elements, or an object's values in key order. A
+    /// single value has none.
+    public var children: [CodableTree] {
+        switch self {
+        case .array(let array): array
+        case .object(let object): object.keys.sorted().map { object[$0]! }
+        default: []
+        }
     }
 }
 

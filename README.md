@@ -137,6 +137,17 @@ let copy = try tree.decode(as: Point.self)
 let literal: CodableTree = ["tags": ["a", "b"], "count": 2]
 ```
 
+Its nodes can be edited in place, reached by path, walked, and compared:
+
+```swift
+var tree = try CodableTree(encoding: person)
+tree["address"]?["city"] = "Bergen"                 // setting nil removes
+tree[["tags", 0]]?.string                           // a path of keys and indices
+tree.children                                       // the nodes directly inside
+tree.forEach { path, node in print(path, node) }    // every node, depth first
+tree.difference(from: original)                     // ["~ age: 30 → 31", "+ tags[2]: \"c\""]
+```
+
 ## Requirements
 
 Swift 6.1 (Xcode 16.3) or later, for typed throws and Swift Testing. iOS 17, macOS 14, tvOS 17, watchOS 10 and
