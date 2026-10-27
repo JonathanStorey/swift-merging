@@ -111,10 +111,10 @@ shorthand per concrete type, so the compiler picks the one that matches the prop
 is the built-in example:
 
 ```swift
-extension MergeStrategy where Self == NumericSumMerge<Int> { public static var numericSum: Self { Self() } }
-extension MergeStrategy where Self == NumericSumMerge<Double> { public static var numericSum: Self { Self() } }
+extension MergeStrategy where Self == NumericSumMerge<Int> { public static var sum: Self { Self() } }
+extension MergeStrategy where Self == NumericSumMerge<Double> { public static var sum: Self { Self() } }
 
-@Merged(.numericSum) var distance = 0.0
+@Merged(.sum) var distance = 0.0
 @Merged(NumericSumMerge()) var price = Money.zero      // a type without a shorthand
 ```
 

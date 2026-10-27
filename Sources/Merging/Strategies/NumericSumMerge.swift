@@ -1,11 +1,10 @@
 /// Adds both sides' changes to the base, as a counter does, so two increments of one both count. A typed
-/// strategy that works with any number type. Needs a base, and a whole number that would overflow is a
-/// conflict.
+/// strategy for any `Numeric` type. Needs a base, and a whole number that would overflow is a conflict.
 ///
 /// ```swift
-/// @Merged(.numericSum) var wins = 0
+/// @Merged(.sum) var wins = 0
 /// ```
-public struct NumericSumMerge<Value: AdditiveArithmetic & Sendable>: MergeStrategy {
+public struct NumericSumMerge<Value: Numeric & Sendable>: MergeStrategy {
     public init() {}
 
     public func merge(base: Value, ours: Value, theirs: Value) throws(MergeConflict<Value>) -> Value {
@@ -27,15 +26,15 @@ private func checkedSum<Whole: FixedWidthInteger>(_ ours: Whole, _ theirs: Any, 
 
 // One shorthand per standard number type, as Foundation does for `.number`, since a static property
 // can't be generic. Another number type writes `NumericSumMerge()`.
-extension MergeStrategy where Self == NumericSumMerge<Int> { public static var numericSum: Self { Self() } }
-extension MergeStrategy where Self == NumericSumMerge<Int8> { public static var numericSum: Self { Self() } }
-extension MergeStrategy where Self == NumericSumMerge<Int16> { public static var numericSum: Self { Self() } }
-extension MergeStrategy where Self == NumericSumMerge<Int32> { public static var numericSum: Self { Self() } }
-extension MergeStrategy where Self == NumericSumMerge<Int64> { public static var numericSum: Self { Self() } }
-extension MergeStrategy where Self == NumericSumMerge<UInt> { public static var numericSum: Self { Self() } }
-extension MergeStrategy where Self == NumericSumMerge<UInt8> { public static var numericSum: Self { Self() } }
-extension MergeStrategy where Self == NumericSumMerge<UInt16> { public static var numericSum: Self { Self() } }
-extension MergeStrategy where Self == NumericSumMerge<UInt32> { public static var numericSum: Self { Self() } }
-extension MergeStrategy where Self == NumericSumMerge<UInt64> { public static var numericSum: Self { Self() } }
-extension MergeStrategy where Self == NumericSumMerge<Double> { public static var numericSum: Self { Self() } }
-extension MergeStrategy where Self == NumericSumMerge<Float> { public static var numericSum: Self { Self() } }
+extension MergeStrategy where Self == NumericSumMerge<Int> { public static var sum: Self { Self() } }
+extension MergeStrategy where Self == NumericSumMerge<Int8> { public static var sum: Self { Self() } }
+extension MergeStrategy where Self == NumericSumMerge<Int16> { public static var sum: Self { Self() } }
+extension MergeStrategy where Self == NumericSumMerge<Int32> { public static var sum: Self { Self() } }
+extension MergeStrategy where Self == NumericSumMerge<Int64> { public static var sum: Self { Self() } }
+extension MergeStrategy where Self == NumericSumMerge<UInt> { public static var sum: Self { Self() } }
+extension MergeStrategy where Self == NumericSumMerge<UInt8> { public static var sum: Self { Self() } }
+extension MergeStrategy where Self == NumericSumMerge<UInt16> { public static var sum: Self { Self() } }
+extension MergeStrategy where Self == NumericSumMerge<UInt32> { public static var sum: Self { Self() } }
+extension MergeStrategy where Self == NumericSumMerge<UInt64> { public static var sum: Self { Self() } }
+extension MergeStrategy where Self == NumericSumMerge<Double> { public static var sum: Self { Self() } }
+extension MergeStrategy where Self == NumericSumMerge<Float> { public static var sum: Self { Self() } }
