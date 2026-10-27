@@ -60,3 +60,9 @@ extension MergeTree {
         return .array(entries.flatMap { [keys[$0.key]!, $0.value] })
     }
 }
+
+extension Merged where Strategy == KeyedMerge {
+    public init<Key, Element>(wrappedValue: Value, _ strategy: KeyedMerge) where Value == [Key: Element] {
+        self.init(wrappedValue: wrappedValue, unchecked: strategy)
+    }
+}

@@ -50,3 +50,9 @@ extension MergeTree {
         return .array(kept + added)
     }
 }
+
+extension Merged where Strategy == MembershipMerge {
+    public init(wrappedValue: Value, _ strategy: MembershipMerge) where Value: Collection {
+        self.init(wrappedValue: wrappedValue, unchecked: strategy)
+    }
+}

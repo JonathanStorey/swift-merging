@@ -23,3 +23,9 @@ extension MergeStrategy where Self == AddingMerge {
     /// A counter: both sides' increments count. Needs a base.
     public static var adding: AddingMerge { AddingMerge() }
 }
+
+extension Merged where Strategy == AddingMerge {
+    public init(wrappedValue: Value, _ strategy: AddingMerge) where Value: AdditiveArithmetic {
+        self.init(wrappedValue: wrappedValue, unchecked: strategy)
+    }
+}

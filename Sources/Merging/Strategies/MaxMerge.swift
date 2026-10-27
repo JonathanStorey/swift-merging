@@ -26,3 +26,9 @@ extension MergeStrategy where Self == MaxMerge {
     /// Keeps the larger value: a high score, the furthest progress, the latest date.
     public static var maximum: MaxMerge { MaxMerge() }
 }
+
+extension Merged where Strategy == MaxMerge {
+    public init(wrappedValue: Value, _ strategy: MaxMerge) where Value: Comparable {
+        self.init(wrappedValue: wrappedValue, unchecked: strategy)
+    }
+}

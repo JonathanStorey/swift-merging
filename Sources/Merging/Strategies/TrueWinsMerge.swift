@@ -18,3 +18,9 @@ extension MergeStrategy where Self == TrueWinsMerge {
     /// A flag anyone can set, such as "flagged" or "read".
     public static var trueWins: TrueWinsMerge { TrueWinsMerge() }
 }
+
+extension Merged where Strategy == TrueWinsMerge {
+    public init(wrappedValue: Value, _ strategy: TrueWinsMerge) where Value == Bool {
+        self.init(wrappedValue: wrappedValue, unchecked: strategy)
+    }
+}

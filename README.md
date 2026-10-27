@@ -74,8 +74,20 @@ unit is merged, and the others say what wins.
 A strategy decides only when both sides changed a property, even to the same value, so two increments of
 a counter both count. `.maximum` and `.trueWins` also merge without a base. `.adding` and `.byWord` need one.
 
-The standard strategies work on a property's `Snapshot`, its stored form, so they fit any type that
-stores the right kind of data. A mismatch, such as `.byWord` on a number, is a conflict when it merges.
+The standard strategies work on a property's `Snapshot`, its stored form, and each declares the types it
+suits, so a mismatch such as `@Merged(.byWord) var count = 0` doesn't compile. A snapshot strategy of
+your own does the same with one initializer:
+
+```swift
+extension Merged where Strategy == ShoutMerge {
+    public init(wrappedValue: Value, _ strategy: ShoutMerge) where Value == String {
+        self.init(wrappedValue: wrappedValue, unchecked: strategy)
+    }
+}
+```
+
+`.maximum` accepts any `Comparable`, but compares the stored form, so a struct of your own is a conflict.
+Give it a typed strategy instead.
 
 A strategy of your own can be typed, working on the property's own type:
 

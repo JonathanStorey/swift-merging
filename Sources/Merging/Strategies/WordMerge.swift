@@ -38,3 +38,9 @@ extension MergeStrategy where Self == WordMerge {
     /// Edits to different words combine. Needs a base.
     public static var byWord: WordMerge { WordMerge() }
 }
+
+extension Merged where Strategy == WordMerge {
+    public init(wrappedValue: Value, _ strategy: WordMerge) where Value == String {
+        self.init(wrappedValue: wrappedValue, unchecked: strategy)
+    }
+}

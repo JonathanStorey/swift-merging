@@ -22,3 +22,9 @@ extension MergeStrategy where Self == UnionMerge {
     /// Keeps every addition, such as tags or recipients. Merges without a base too.
     public static var union: UnionMerge { UnionMerge() }
 }
+
+extension Merged where Strategy == UnionMerge {
+    public init(wrappedValue: Value, _ strategy: UnionMerge) where Value: Collection {
+        self.init(wrappedValue: wrappedValue, unchecked: strategy)
+    }
+}
