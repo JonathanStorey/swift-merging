@@ -63,44 +63,57 @@ extension MergeTree: Mergeable {
         return merged
     }
 
-    /// Merges element by element, like a three-way merge of lines. An element either side removed is removed,
-    /// and what each side inserted goes where it was inserted, ours first. Where both sides replaced the same
-    /// element with one element each, those two merge; any other replacement both sides made is a conflict.
+    /// Merges element by element, like a three-way merge of lines, with replacements both sides made
+    /// merging by the elements' own merge.
     private static func merge(_ ours: [MergeTree], _ theirs: [MergeTree], base: [MergeTree]) throws(MergeConflict<MergeTree>) -> [MergeTree] {
-        let mine = Edits(ours, from: base)
-        let other = Edits(theirs, from: base)
-        var merged: [MergeTree] = []
-        for index in 0...base.count {
-            let (inserted, theirsInserted) = (mine.inserted[index], other.inserted[index])
-            if inserted == theirsInserted || theirsInserted.isEmpty {
-                merged += inserted
-            } else if inserted.isEmpty {
-                merged += theirsInserted
-            } else if index < base.count, mine.removed.contains(index), other.removed.contains(index) {
-                // Both replaced the element that follows.
-                guard inserted.count == 1, theirsInserted.count == 1 else {
-                    throw MergeConflict(base: base[index], ours: .array(inserted), theirs: .array(theirsInserted))
-                }
-                merged.append(try inserted[0].merging(theirsInserted[0], base: base[index]))
-            } else {
-                merged += inserted + theirsInserted
-            }
-            if index < base.count, !mine.removed.contains(index), !other.removed.contains(index) {
-                merged.append(base[index])
-            }
+        try mergeElements(ours, theirs, base: base) { ours, theirs, base throws(MergeConflict<MergeTree>) in
+            try ours.merging(theirs, base: base)
+        } conflict: { base, ours, theirs in
+            MergeConflict(base: base, ours: .array(ours), theirs: .array(theirs))
         }
-        return merged
     }
+}
+
+/// Merges element by element, like a three-way merge of lines. An element either side removed is removed,
+/// and what each side inserted goes where it was inserted, ours first. Where both sides replaced the same
+/// element with one element each, `replaced` merges those two; any other replacement both sides made is a
+/// conflict.
+func mergeElements<Element: Equatable, Failure: Error>(
+    _ ours: [Element], _ theirs: [Element], base: [Element],
+    replaced: (Element, Element, Element) throws(Failure) -> Element,
+    conflict: (Element, [Element], [Element]) -> Failure
+) throws(Failure) -> [Element] {
+    let mine = Edits(ours, from: base)
+    let other = Edits(theirs, from: base)
+    var merged: [Element] = []
+    for index in 0...base.count {
+        let (inserted, theirsInserted) = (mine.inserted[index], other.inserted[index])
+        if inserted == theirsInserted || theirsInserted.isEmpty {
+            merged += inserted
+        } else if inserted.isEmpty {
+            merged += theirsInserted
+        } else if index < base.count, mine.removed.contains(index), other.removed.contains(index) {
+            // Both replaced the element that follows.
+            guard inserted.count == 1, theirsInserted.count == 1 else { throw conflict(base[index], inserted, theirsInserted) }
+            merged.append(try replaced(inserted[0], theirsInserted[0], base[index]))
+        } else {
+            merged += inserted + theirsInserted
+        }
+        if index < base.count, !mine.removed.contains(index), !other.removed.contains(index) {
+            merged.append(base[index])
+        }
+    }
+    return merged
 }
 
 /// One side's changes to an array: the base elements it removed, and what it inserted before each base
 /// element, with the last slot for what it added at the end. A changed element is removed, with its new
 /// version inserted before it.
-private struct Edits {
+private struct Edits<Element: Equatable> {
     var removed: Set<Int> = []
-    var inserted: [[MergeTree]]
+    var inserted: [[Element]]
 
-    init(_ side: [MergeTree], from base: [MergeTree]) {
+    init(_ side: [Element], from base: [Element]) {
         inserted = Array(repeating: [], count: base.count + 1)
         var insertedOffsets: Set<Int> = []
         for change in side.difference(from: base) {

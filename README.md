@@ -79,6 +79,7 @@ struct Game: Codable, Mergeable {
 | `.byMembership` | `SetAlgebraMembershipMerge` | any `SetAlgebra`, such as `Set` or an `OptionSet` | yes |
 | `.union` | `SetAlgebraUnionMerge` | any `SetAlgebra` | no |
 | `.byKey` | `DictionaryKeyedMerge` | any `Codable` dictionary | no |
+| `.byElement` | `RangeReplaceableCollectionElementMerge` | arrays element by element, `String` by character | yes |
 | `.byNode` | `CodableNodeMerge` | any `Codable`, overriding a type's own merge | no |
 
 Each is named for the type it suits, then its shorthand, then `Merge`. A strategy decides only when both

@@ -141,3 +141,45 @@ struct Board: Codable, Equatable, Mergeable {
         #expect(try ours.merging(theirs, base: Mail()).recipients == ["ana", "cy"])
     }
 }
+
+@Suite struct ElementMergeTests {
+    struct Recipe: Codable, Mergeable {
+        @Merged(.byElement) var steps = ["boil", "stir", "serve"]
+        @Merged(.byElement) var title = "soup"
+        @Merged(.byElement) var players = [Player(id: 1, name: "Ana", highScore: 10)]
+    }
+
+    @Test func insertionsFromBothSidesAreKept() throws {
+        var ours = Recipe()
+        ours.steps.insert("salt", at: 1)
+        var theirs = Recipe()
+        theirs.steps.append("eat")
+        theirs.steps.removeFirst()
+        #expect(try ours.merging(theirs, base: Recipe()).steps == ["salt", "stir", "serve", "eat"])
+    }
+
+    @Test func textMergesByCharacter() throws {
+        var ours = Recipe()
+        ours.title = "soups"
+        var theirs = Recipe()
+        theirs.title = "Soup"
+        #expect(try ours.merging(theirs, base: Recipe()).title == "Soups")
+    }
+
+    @Test func elementsBothReplacedMergeByTheirOwnMerge() throws {
+        var ours = Recipe()
+        ours.players[0].highScore = 30
+        var theirs = Recipe()
+        theirs.players[0].name = "Ana B"
+        let merged = try ours.merging(theirs, base: Recipe()).players[0]
+        #expect(merged.highScore == 30)
+        #expect(merged.name == "Ana B")
+    }
+
+    @Test func theTypedStrategyMatchesByEquality() throws {
+        let strategy = RangeReplaceableCollectionElementMerge<[Int]>()
+        #expect(try strategy.merge(base: [1, 2, 3], ours: [0, 1, 2, 3], theirs: [1, 2, 3, 4]) == [0, 1, 2, 3, 4])
+        #expect(throws: MergeConflict<[Int]>.self) { try strategy.merge(base: [1], ours: [2], theirs: [3]) }
+        #expect(try RangeReplaceableCollectionElementMerge<String>().merge(base: "cat", ours: "cart", theirs: "cats") == "carts")
+    }
+}
