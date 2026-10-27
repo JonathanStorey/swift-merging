@@ -106,6 +106,17 @@ struct Higher<Value: Comparable & Sendable>: MergeStrategy {
 @Merged(Higher()) var level = Level(number: 1)      // uses Level's own <
 ```
 
+A generic typed strategy gets dot syntax from a generic static function, which needs parentheses
+because a static property can't be generic. `NumericSumMerge` is the built-in example:
+
+```swift
+extension MergeStrategy {
+    public static func numericSum<Value>() -> Self where Self == NumericSumMerge<Value> { NumericSumMerge() }
+}
+
+@Merged(.numericSum()) var distance = 0.0
+```
+
 It implements the three-way merge, and the two-way merge too if it needs no ancestor. It's made with
 `init()` when a value decodes, so it holds no settings of its own. A non-generic strategy whose merge
 doesn't throw names its value with `typealias Value`.

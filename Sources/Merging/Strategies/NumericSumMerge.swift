@@ -1,0 +1,31 @@
+/// Adds both sides' changes to the base, as a counter does, so two increments of one both count. A typed
+/// strategy that works with any number type. Needs a base, and a whole number that would overflow is a
+/// conflict.
+///
+/// ```swift
+/// @Merged(.numericSum()) var wins = 0
+/// ```
+public struct NumericSumMerge<Value: AdditiveArithmetic & Sendable>: MergeStrategy {
+    public init() {}
+
+    public func merge(base: Value, ours: Value, theirs: Value) throws(MergeConflict<Value>) -> Value {
+        guard let whole = ours as? any FixedWidthInteger else { return ours + theirs - base }
+        guard let sum = checkedSum(whole, theirs, base) as? Value else {
+            throw MergeConflict(base: base, ours: ours, theirs: theirs)
+        }
+        return sum
+    }
+}
+
+/// `ours + theirs - base`, or nil if a step overflows.
+private func checkedSum<Whole: FixedWidthInteger>(_ ours: Whole, _ theirs: Any, _ base: Any) -> Any? {
+    guard let theirs = theirs as? Whole, let base = base as? Whole else { return nil }
+    let (added, overflowed) = ours.addingReportingOverflow(theirs)
+    let (sum, underflowed) = added.subtractingReportingOverflow(base)
+    return overflowed || underflowed ? nil : sum
+}
+
+extension MergeStrategy {
+    /// A counter on any number type: both sides' increments count. Needs a base.
+    public static func numericSum<Value>() -> Self where Self == NumericSumMerge<Value> { NumericSumMerge() }
+}
