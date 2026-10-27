@@ -12,6 +12,16 @@
 public struct Merged<Value: Codable & Sendable, Strategy: MergeStrategy>: Sendable {
     public var wrappedValue: Value
 
+    /// The wrapper itself, so `$` merges one property by its strategy:
+    ///
+    /// ```swift
+    /// try player.$highScore.merge(with: theirs.highScore, from: base.highScore)
+    /// ```
+    public var projectedValue: Self {
+        get { self }
+        set { self = newValue }
+    }
+
     /// Merges with a typed strategy, whose values are the property's.
     public init(wrappedValue: Value, _ strategy: Strategy) where Strategy.Value == Value {
         self.wrappedValue = wrappedValue
@@ -29,6 +39,47 @@ extension Merged {
     /// suits.
     init(wrappedValue: Value, shortcut: Strategy) where Strategy: MergeShortcut {
         self.wrappedValue = wrappedValue
+    }
+}
+
+extension Merged {
+    /// Merges `theirs` into this property's value, which is ours, as the whole value's merge would: a side
+    /// only one changed keeps that side, and the strategy decides when both did.
+    public func merging(with theirs: Value, from base: Value) throws(MergeConflict<Value>) -> Value {
+        do {
+            return try decode(node(wrappedValue).merging(with: node(theirs), from: node(base)))
+        } catch {
+            throw MergeConflict(base: base, ours: wrappedValue, theirs: theirs)
+        }
+    }
+
+    /// Merges `theirs` into this property's value without a common ancestor, if the strategy can.
+    public func merging(with theirs: Value) throws(MergeConflict<Value>) -> Value {
+        do {
+            return try decode(node(wrappedValue).merging(with: node(theirs)))
+        } catch {
+            throw MergeConflict(ours: wrappedValue, theirs: theirs)
+        }
+    }
+
+    /// Merges `theirs` into this property's value. On a conflict the value is left unchanged.
+    public mutating func merge(with theirs: Value, from base: Value) throws(MergeConflict<Value>) {
+        wrappedValue = try merging(with: theirs, from: base)
+    }
+
+    /// Merges `theirs` into this property's value without a common ancestor. On a conflict the value is left
+    /// unchanged.
+    public mutating func merge(with theirs: Value) throws(MergeConflict<Value>) {
+        wrappedValue = try merging(with: theirs)
+    }
+
+    /// A value as it sits in a merge tree, under this property's rule.
+    private func node(_ value: Value) throws -> MergeTree {
+        .merged(try TreeEncoder().encode(value), mergeRule)
+    }
+
+    private func decode(_ tree: MergeTree) throws -> Value {
+        try TreeDecoder().decode(Value.self, from: tree)
     }
 }
 

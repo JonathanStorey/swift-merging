@@ -16,7 +16,7 @@ struct Tally: Codable, Equatable, Mergeable {
         var theirs = base
         theirs.visits += 1
         theirs.bytes -= 4
-        let merged = try ours.merging(theirs, base: base)
+        let merged = try ours.merging(with: theirs, from: base)
         #expect(merged == Tally(visits: 5, distance: 3.5, bytes: 6))
     }
 

@@ -30,7 +30,7 @@ struct Board: Codable, Equatable, Mergeable {
         var theirs = base
         theirs.tags.insert("theirs")
         theirs.tags.remove("b")
-        #expect(try ours.merging(theirs, base: base).tags == ["c", "ours", "theirs"])
+        #expect(try ours.merging(with: theirs, from: base).tags == ["c", "ours", "theirs"])
     }
 
     @Test func manySetsMergeWhateverTheirOrder() throws {
@@ -41,7 +41,7 @@ struct Board: Codable, Equatable, Mergeable {
         ours.tags.insert("x")
         var theirs = start
         theirs.tags.remove("7")
-        #expect(try ours.merging(theirs, base: start).tags == big.subtracting(["7"]).union(["x"]))
+        #expect(try ours.merging(with: theirs, from: start).tags == big.subtracting(["7"]).union(["x"]))
     }
 
     @Test func aDictionaryWithStructKeysMergesByKey() throws {
@@ -50,7 +50,7 @@ struct Board: Codable, Equatable, Mergeable {
         var theirs = base
         theirs.pins[Spot(x: 0, y: 0)] = "start"
         theirs.pins[Spot(x: 2, y: 2)] = "theirs"
-        #expect(try ours.merging(theirs, base: base).pins == [
+        #expect(try ours.merging(with: theirs, from: base).pins == [
             Spot(x: 0, y: 0): "start", Spot(x: 1, y: 1): "ours", Spot(x: 2, y: 2): "theirs",
         ])
     }
@@ -60,7 +60,7 @@ struct Board: Codable, Equatable, Mergeable {
         ours.counts["a"] = 2
         var theirs = base
         theirs.counts["a"] = 3
-        #expect(throws: MergeConflict<Board>.self) { try ours.merging(theirs, base: base) }
+        #expect(throws: MergeConflict<Board>.self) { try ours.merging(with: theirs, from: base) }
     }
 
     @Test func dictionaryValuesUseTheirOwnMerge() throws {
@@ -71,14 +71,14 @@ struct Board: Codable, Equatable, Mergeable {
         var theirs = start
         theirs.players["ana"]!.highScore = 20
         theirs.players["ana"]!.name = "Ana B"
-        let merged = try ours.merging(theirs, base: start).players["ana"]
+        let merged = try ours.merging(with: theirs, from: start).players["ana"]
         #expect(merged?.highScore == 30)
         #expect(merged?.name == "Ana B")
     }
 
     @Test func twoWayAcceptsEqualSetsInAnyOrder() throws {
         let board = Board(tags: Set((0..<200).map(String.init)))
-        #expect(try board.merging(Board(tags: Set((0..<200).map(String.init)))) == board)
+        #expect(try board.merging(with: Board(tags: Set((0..<200).map(String.init)))) == board)
     }
 
     @Test func canonicalTextSortsKeys() {
@@ -101,7 +101,7 @@ struct Board: Codable, Equatable, Mergeable {
         var theirs = Note()
         theirs.tags = ["b", "a", "theirs"]
         theirs.shipping = [.signed]
-        let merged = try ours.merging(theirs, base: Note())
+        let merged = try ours.merging(with: theirs, from: Note())
         #expect(merged.tags == ["a", "ours", "theirs"])
         #expect(merged.shipping == [.gift, .signed])
     }
@@ -111,7 +111,7 @@ struct Board: Codable, Equatable, Mergeable {
         ours.scores[Spot(x: 1, y: 1)] = 2
         var theirs = Note()
         theirs.scores[Spot(x: 0, y: 0)] = 5
-        #expect(try ours.merging(theirs, base: Note()).scores == [Spot(x: 0, y: 0): 5, Spot(x: 1, y: 1): 2])
+        #expect(try ours.merging(with: theirs, from: Note()).scores == [Spot(x: 0, y: 0): 5, Spot(x: 1, y: 1): 2])
     }
 }
 
@@ -128,7 +128,7 @@ struct Board: Codable, Equatable, Mergeable {
         var theirs = Mail()
         theirs.recipients = ["bo", "di", "ana"]
         theirs.labels = ["home"]
-        let merged = try ours.merging(theirs)
+        let merged = try ours.merging(with: theirs)
         #expect(merged.recipients == ["ana", "cy", "bo", "di"])
         #expect(merged.labels == ["inbox", "work", "home"])
     }
@@ -138,7 +138,7 @@ struct Board: Codable, Equatable, Mergeable {
         ours.recipients = ["ana"]
         var theirs = Mail()
         theirs.recipients = ["ana", "bo", "cy"]
-        #expect(try ours.merging(theirs, base: Mail()).recipients == ["ana", "cy"])
+        #expect(try ours.merging(with: theirs, from: Mail()).recipients == ["ana", "cy"])
     }
 }
 
@@ -155,7 +155,7 @@ struct Board: Codable, Equatable, Mergeable {
         var theirs = Recipe()
         theirs.steps.append("eat")
         theirs.steps.removeFirst()
-        #expect(try ours.merging(theirs, base: Recipe()).steps == ["salt", "stir", "serve", "eat"])
+        #expect(try ours.merging(with: theirs, from: Recipe()).steps == ["salt", "stir", "serve", "eat"])
     }
 
     @Test func textMergesByCharacter() throws {
@@ -163,7 +163,7 @@ struct Board: Codable, Equatable, Mergeable {
         ours.title = "soups"
         var theirs = Recipe()
         theirs.title = "Soup"
-        #expect(try ours.merging(theirs, base: Recipe()).title == "Soups")
+        #expect(try ours.merging(with: theirs, from: Recipe()).title == "Soups")
     }
 
     @Test func elementsBothReplacedMergeByTheirOwnMerge() throws {
@@ -171,7 +171,7 @@ struct Board: Codable, Equatable, Mergeable {
         ours.players[0].highScore = 30
         var theirs = Recipe()
         theirs.players[0].name = "Ana B"
-        let merged = try ours.merging(theirs, base: Recipe()).players[0]
+        let merged = try ours.merging(with: theirs, from: Recipe()).players[0]
         #expect(merged.highScore == 30)
         #expect(merged.name == "Ana B")
     }

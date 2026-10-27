@@ -26,7 +26,7 @@ struct Game: Codable, Equatable, Mergeable {
         ours(&mine)
         var other = base
         theirs(&other)
-        return try mine.merging(other, base: base)
+        return try mine.merging(with: other, from: base)
     }
 
     @Test func maximumKeepsTheLargerByTheTypesOwnOrder() throws {
@@ -50,7 +50,7 @@ struct Game: Codable, Equatable, Mergeable {
         ours.wins += 1
         var theirs = start
         theirs.wins += 1
-        #expect(throws: MergeConflict<Game>.self) { try ours.merging(theirs, base: start) }
+        #expect(throws: MergeConflict<Game>.self) { try ours.merging(with: theirs, from: start) }
     }
 
     @Test func trueWinsSetsTheFlag() throws {
@@ -72,11 +72,11 @@ struct Game: Codable, Equatable, Mergeable {
         var theirs = base
         theirs.highScore = 50
         theirs.flagged = true
-        let merged = try base.merging(theirs)
+        let merged = try base.merging(with: theirs)
         #expect(merged.highScore == 50)
         #expect(merged.flagged)
         theirs.wins = 9
-        #expect(throws: MergeConflict<Game>.self) { try base.merging(theirs) }
+        #expect(throws: MergeConflict<Game>.self) { try base.merging(with: theirs) }
     }
 
     @Test func wordsJoinBackToTheText() {
@@ -92,7 +92,7 @@ struct Game: Codable, Equatable, Mergeable {
         ours.wins += 1
         var theirs = base
         theirs.wins += 1
-        #expect(try ours.merging(theirs, base: base).wins == 5)
+        #expect(try ours.merging(with: theirs, from: base).wins == 5)
     }
 }
 
@@ -139,7 +139,7 @@ extension Merged where Strategy == LargerTree {
         var theirs = Score()
         theirs.best = 4
         theirs.worst = 4
-        let merged = try ours.merging(theirs, base: Score())
+        let merged = try ours.merging(with: theirs, from: Score())
         #expect(merged.best == 7)
         #expect(merged.worst == 7)
     }
@@ -166,7 +166,22 @@ extension Merged where Strategy == LargerTree {
         ours.booking.note = "b"
         var theirs = Trip()
         theirs.booking.confirmed = true
-        let merged = try ours.merging(theirs, base: Trip())
+        let merged = try ours.merging(with: theirs, from: Trip())
         #expect(merged.booking == Booking(note: "b", confirmed: true))
+    }
+}
+
+@Suite struct ProjectedValueTests {
+    @Test func dollarMergesOnePropertyByItsStrategy() throws {
+        var game = Game()
+        #expect(try game.$highScore.merging(with: 20, from: 10) == 20)
+        try game.$wins.merge(with: 5, from: 3)
+        #expect(game.wins == 5)
+        game.wins = 4
+        try game.$wins.merge(with: 5, from: 3)
+        #expect(game.wins == 6)
+        #expect(try game.$flagged.merging(with: true))
+        #expect(throws: MergeConflict<Int>.self) { try game.$wins.merging(with: 9) }
+        #expect(game.wins == 6)
     }
 }

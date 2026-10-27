@@ -13,17 +13,17 @@ struct Note: Codable, Mergeable {
 }
 
 var draft = mine
-try draft.merge(yours, base: original)             // or draft.merging(yours, base: original)
+try draft.merge(with: yours, from: original)             // or draft.merging(with: yours, from: original)
 ```
 
 ## Mergeable
 
-`Mergeable` has one requirement, `merging(_:base:)`, which merges `theirs` into a value, which is ours,
+`Mergeable` has one requirement, `merging(with:from:)`, which merges `theirs` into a value, which is ours,
 knowing their common ancestor. A merge throws a `MergeConflict` holding the versions when it can't merge
-them. The mutating `merge(_:base:)` leaves the value unchanged on a conflict, and the static
+them. The mutating `merge(with:from:)` leaves the value unchanged on a conflict, and the static
 `merge(base:ours:theirs:)` is there too.
 
-Without an ancestor there's no telling which side changed, so the two-way `merging(_:)` throws a conflict
+Without an ancestor there's no telling which side changed, so the two-way `merging(with:)` throws a conflict
 unless the type knows how to merge without one.
 
 There are three ways to conform, from least to most code:
@@ -39,14 +39,14 @@ There are three ways to conform, from least to most code:
 2. **`@Merged(_:)` picks a property's `MergeStrategy`**, for a type that merges differently in different
    places, such as an `Int` that's a counter in one property and a high score in another. The wrapper
    encodes as its bare value, so adding it doesn't change what's stored.
-3. **Write `merging(_:base:)` yourself** to merge the whole value your own way:
+3. **Write `merging(with:from:)` yourself** to merge the whole value your own way:
 
 ```swift
 struct Booking: Codable, Mergeable {
     var note = ""
     var confirmed = false
 
-    func merging(_ theirs: Booking, base: Booking) -> Booking {
+    func merging(with theirs: Booking, from base: Booking) -> Booking {
         confirmed ? self : theirs
     }
 }
@@ -86,6 +86,13 @@ Each is named for the type it suits, then its shorthand, then `Merge`. A strateg
 sides changed a property, even to the same value, so two increments of a counter both count. Sets merge
 `.byMembership` and dictionaries `.byKey` without naming a strategy. A mismatch such as
 `@Merged(.byWord) var count = 0` doesn't compile.
+
+`$` merges one property by its strategy, as the whole value's merge would:
+
+```swift
+try game.$wins.merge(with: theirs.wins, from: base.wins)
+let best = try game.$highScore.merging(with: 20, from: 10)
+```
 
 Every standard strategy is typed, so it also merges plain values:
 

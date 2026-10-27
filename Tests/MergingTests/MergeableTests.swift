@@ -25,7 +25,7 @@ struct Booking: Codable, Equatable, Mergeable {
     var note = ""
     var confirmed = false
 
-    func merging(_ theirs: Booking, base: Booking) -> Booking {
+    func merging(with theirs: Booking, from base: Booking) -> Booking {
         confirmed ? self : theirs
     }
 }
@@ -47,7 +47,7 @@ struct Player: Codable, Equatable, Mergeable {
         ours.name = "Ana B"
         var theirs = base
         theirs.address.city = "Bergen"
-        let merged = try ours.merging(theirs, base: base)
+        let merged = try ours.merging(with: theirs, from: base)
         #expect(merged.name == "Ana B")
         #expect(merged.address == Address(street: "Elm", city: "Bergen"))
     }
@@ -59,7 +59,7 @@ struct Player: Codable, Equatable, Mergeable {
         var theirs = base
         theirs.highScore = 20
         theirs.wins = 4
-        let merged = try ours.merging(theirs, base: base)
+        let merged = try ours.merging(with: theirs, from: base)
         #expect(merged.highScore == 30)
         #expect(merged.wins == 6)
     }
@@ -69,7 +69,7 @@ struct Player: Codable, Equatable, Mergeable {
         ours.booking = Booking(note: "mine")
         var theirs = base
         theirs.booking = Booking(note: "theirs", confirmed: true)
-        #expect(try ours.merging(theirs, base: base).booking == Booking(note: "theirs", confirmed: true))
+        #expect(try ours.merging(with: theirs, from: base).booking == Booking(note: "theirs", confirmed: true))
     }
 
     @Test func aPropertyBothChangedMakesTheValueAConflict() {
@@ -78,7 +78,7 @@ struct Player: Codable, Equatable, Mergeable {
         var theirs = base
         theirs.name = "Ana C"
         do {
-            _ = try ours.merging(theirs, base: base)
+            _ = try ours.merging(with: theirs, from: base)
             Issue.record("Expected a conflict")
         } catch {
             #expect(error.base?.name == "Ana")
@@ -90,13 +90,13 @@ struct Player: Codable, Equatable, Mergeable {
     @Test func twoWayMergesWhatsEqualAndWhatsStrategyAllows() throws {
         var theirs = base
         theirs.highScore = 50
-        #expect(try base.merging(theirs).highScore == 50)
+        #expect(try base.merging(with: theirs).highScore == 50)
         theirs.wins = 9
-        #expect(throws: MergeConflict<Player>.self) { try base.merging(theirs) }
+        #expect(throws: MergeConflict<Player>.self) { try base.merging(with: theirs) }
     }
 
     @Test func aHandWrittenMergeThrowsWithoutABase() {
-        #expect(throws: MergeConflict<Booking>.self) { try Booking().merging(Booking(note: "x")) }
+        #expect(throws: MergeConflict<Booking>.self) { try Booking().merging(with: Booking(note: "x")) }
     }
 
     @Test func mutatingAndStaticMergesMatch() throws {
@@ -105,7 +105,7 @@ struct Player: Codable, Equatable, Mergeable {
         var theirs = base
         theirs.address.city = "Bergen"
         let merged = try Player.merge(base: base, ours: ours, theirs: theirs)
-        try ours.merge(theirs, base: base)
+        try ours.merge(with: theirs, from: base)
         #expect(ours == merged)
     }
 
@@ -115,7 +115,7 @@ struct Player: Codable, Equatable, Mergeable {
         let before = ours
         var theirs = base
         theirs.name = "Ana C"
-        #expect(throws: MergeConflict<Player>.self) { try ours.merge(theirs, base: base) }
+        #expect(throws: MergeConflict<Player>.self) { try ours.merge(with: theirs, from: base) }
         #expect(ours == before)
     }
 

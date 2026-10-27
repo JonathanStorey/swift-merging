@@ -10,7 +10,7 @@ public struct StringWordMerge<Value: StringProtocol & Sendable>: MergeStrategy {
     public func merge(base: Value, ours: Value, theirs: Value) throws(MergeConflict<Value>) -> Value {
         func words(_ text: Value) -> CodableTree { .array(Self.words(String(text)).map(CodableTree.string)) }
         do {
-            let merged = try words(ours).merging(words(theirs), base: words(base))
+            let merged = try words(ours).merging(with: words(theirs), from: words(base))
             let text = merged.children.compactMap(\.string).joined()
             return Value(decoding: text.utf8, as: UTF8.self)
         } catch {

@@ -69,8 +69,8 @@ extension Dictionary: DefaultMergeRule {
 extension MergeTree {
     static func mergeDictionaries(_ ours: MergeTree, _ theirs: MergeTree, base: MergeTree?) throws(MergeConflict<MergeTree>) -> MergeTree {
         guard case .array = ours else {
-            if let base { return try ours.merging(theirs, base: base) }
-            return try ours.merging(theirs)
+            if let base { return try ours.merging(with: theirs, from: base) }
+            return try ours.merging(with: theirs)
         }
         // Keys line up by their canonical text, so any key works.
         var keys: [String: MergeTree] = [:]
@@ -85,7 +85,7 @@ extension MergeTree {
             return .object(object)
         }
         let (mine, other) = (try object(ours), try object(theirs))
-        let merged = if let base { try mine.merging(other, base: object(base)) } else { try mine.merging(other) }
+        let merged = if let base { try mine.merging(with: other, from: object(base)) } else { try mine.merging(with: other) }
         guard case .object(let entries) = merged else { return ours }
         return .array(entries.flatMap { [keys[$0.key]!, $0.value] })
     }

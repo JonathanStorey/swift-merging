@@ -53,7 +53,7 @@ private final class Node: Encoder {
 
     private static func rule<M: Mergeable & Codable>(for value: M) -> MergeRule {
         MergeRule(M.self) { ours, theirs, base in
-            if let base { try ours.merging(theirs, base: base) } else { try ours.merging(theirs) }
+            if let base { try ours.merging(with: theirs, from: base) } else { try ours.merging(with: theirs) }
         }
     }
 

@@ -153,17 +153,17 @@ extension CodableTree: ExpressibleByNilLiteral, ExpressibleByBooleanLiteral, Exp
 /// CodableTrees merge by their shape: objects key by key, arrays element by element, and anything else by
 /// keeping the side that changed.
 extension CodableTree: Mergeable {
-    public func merging(_ theirs: CodableTree, base: CodableTree) throws(MergeConflict<CodableTree>) -> CodableTree {
+    public func merging(with theirs: CodableTree, from base: CodableTree) throws(MergeConflict<CodableTree>) -> CodableTree {
         do {
-            return CodableTree(try MergeTree(self).merging(MergeTree(theirs), base: MergeTree(base)))
+            return CodableTree(try MergeTree(self).merging(with: MergeTree(theirs), from: MergeTree(base)))
         } catch {
             throw MergeConflict(base: error.base.map(CodableTree.init), ours: CodableTree(error.ours), theirs: CodableTree(error.theirs))
         }
     }
 
-    public func merging(_ theirs: CodableTree) throws(MergeConflict<CodableTree>) -> CodableTree {
+    public func merging(with theirs: CodableTree) throws(MergeConflict<CodableTree>) -> CodableTree {
         do {
-            return CodableTree(try MergeTree(self).merging(MergeTree(theirs)))
+            return CodableTree(try MergeTree(self).merging(with: MergeTree(theirs)))
         } catch {
             throw MergeConflict(ours: CodableTree(error.ours), theirs: CodableTree(error.theirs))
         }

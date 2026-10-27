@@ -45,13 +45,13 @@ public struct ByElementShortcut: MergeStrategy, MergeShortcut {
     static func rule<Value: Codable & Sendable>(for type: Value.Type) -> MergeRule {
         MergeRule { ours, theirs, base throws(MergeConflict<MergeTree>) in
             guard case .string = ours else {
-                guard let base else { return try ours.merging(theirs) }
-                return try ours.merging(theirs, base: base)
+                guard let base else { return try ours.merging(with: theirs) }
+                return try ours.merging(with: theirs, from: base)
             }
             let merged = if let base {
-                try characters(ours).merging(characters(theirs), base: characters(base))
+                try characters(ours).merging(with: characters(theirs), from: characters(base))
             } else {
-                try characters(ours).merging(characters(theirs))
+                try characters(ours).merging(with: characters(theirs))
             }
             guard case .array(let elements) = merged else { return merged }
             return .string(elements.map { if case .string(let character) = $0 { character } else { "" } }.joined())

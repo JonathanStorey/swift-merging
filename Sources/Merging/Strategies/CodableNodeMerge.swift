@@ -16,7 +16,7 @@ public struct CodableNodeMerge<Value: Codable & Sendable>: MergeStrategy {
     public func merge(base: Value, ours: Value, theirs: Value) throws(MergeConflict<Value>) -> Value {
         do {
             let encoder = TreeEncoder()
-            let merged = try encoder.encode(ours).merging(encoder.encode(theirs), base: encoder.encode(base))
+            let merged = try encoder.encode(ours).merging(with: encoder.encode(theirs), from: encoder.encode(base))
             return try TreeDecoder().decode(Value.self, from: merged)
         } catch {
             throw MergeConflict(base: base, ours: ours, theirs: theirs)
@@ -26,7 +26,7 @@ public struct CodableNodeMerge<Value: Codable & Sendable>: MergeStrategy {
     public func merge(ours: Value, theirs: Value) throws(MergeConflict<Value>) -> Value {
         do {
             let encoder = TreeEncoder()
-            let merged = try encoder.encode(ours).merging(encoder.encode(theirs))
+            let merged = try encoder.encode(ours).merging(with: encoder.encode(theirs))
             return try TreeDecoder().decode(Value.self, from: merged)
         } catch {
             throw MergeConflict(ours: ours, theirs: theirs)

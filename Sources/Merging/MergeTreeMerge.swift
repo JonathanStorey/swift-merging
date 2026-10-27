@@ -4,7 +4,7 @@ extension MergeTree: Mergeable {
     /// Merges `theirs` into this tree, which is ours, knowing their common ancestor. A part only one side
     /// changed keeps that side. Where both did, a part with a rule merges by it, objects merge key by key and
     /// arrays element by element, and anything else is a conflict.
-    func merging(_ theirs: MergeTree, base: MergeTree) throws(MergeConflict<MergeTree>) -> MergeTree {
+    func merging(with theirs: MergeTree, from base: MergeTree) throws(MergeConflict<MergeTree>) -> MergeTree {
         if theirs == base { return self }
         if self == base { return theirs }
         // Both sides changed it. Equal changes still go to a rule, since a counter both sides added one to
@@ -20,18 +20,18 @@ extension MergeTree: Mergeable {
     }
 
     /// Merges without a common ancestor, so only what's equal, or what has a rule for merging without one.
-    func merging(_ theirs: MergeTree) throws(MergeConflict<MergeTree>) -> MergeTree {
+    func merging(with theirs: MergeTree) throws(MergeConflict<MergeTree>) -> MergeTree {
         if self == theirs { return self }
         switch (self, theirs) {
         case let (.merged(ours, rule), .merged(theirs, _)):
             return .merged(try rule.merge(ours, theirs, nil), rule)
         case let (.object(ours), .object(theirs)) where Set(ours.keys) == Set(theirs.keys):
             var merged: [String: MergeTree] = [:]
-            for (key, value) in ours { merged[key] = try value.merging(theirs[key]!) }
+            for (key, value) in ours { merged[key] = try value.merging(with: theirs[key]!) }
             return .object(merged)
         case let (.array(ours), .array(theirs)) where ours.count == theirs.count:
             var merged: [MergeTree] = []
-            for (value, other) in zip(ours, theirs) { merged.append(try value.merging(other)) }
+            for (value, other) in zip(ours, theirs) { merged.append(try value.merging(with: other)) }
             return .array(merged)
         default:
             throw MergeConflict(ours: self, theirs: theirs)
@@ -52,9 +52,9 @@ extension MergeTree: Mergeable {
                 merged[key] = other
             } else if let mine, let other {
                 if let original {
-                    merged[key] = try mine.merging(other, base: original)
+                    merged[key] = try mine.merging(with: other, from: original)
                 } else {
-                    merged[key] = try mine.merging(other)
+                    merged[key] = try mine.merging(with: other)
                 }
             } else if mine != other {
                 throw MergeConflict(base: original, ours: mine ?? .null, theirs: other ?? .null)
@@ -67,7 +67,7 @@ extension MergeTree: Mergeable {
     /// merging by the elements' own merge.
     private static func merge(_ ours: [MergeTree], _ theirs: [MergeTree], base: [MergeTree]) throws(MergeConflict<MergeTree>) -> [MergeTree] {
         try mergeElements(ours, theirs, base: base) { ours, theirs, base throws(MergeConflict<MergeTree>) in
-            try ours.merging(theirs, base: base)
+            try ours.merging(with: theirs, from: base)
         } conflict: { base, ours, theirs in
             MergeConflict(base: base, ours: .array(ours), theirs: .array(theirs))
         }
