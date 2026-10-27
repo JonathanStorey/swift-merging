@@ -1,9 +1,7 @@
 /// Merges a set, or an array treated as one, by what each side added and removed: an element is kept if
 /// either side added it, and removed if either side removed it. Order doesn't matter. Without a base,
 /// only equal sets merge.
-public struct MembershipMerge: MergeStrategy {
-    public typealias Value = Snapshot
-
+public struct MembershipMerge: SnapshotMergeStrategy {
     public init() {}
 
     public func merge(base: Snapshot, ours: Snapshot, theirs: Snapshot) throws(MergeConflict<Snapshot>) -> Snapshot {

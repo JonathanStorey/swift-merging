@@ -2,9 +2,7 @@
 /// membership, keeping what either side added and dropping what either removed. Without one, there's no
 /// telling an addition from a removal, so it keeps every element either side has: ours in order, then
 /// theirs that ours lacks.
-public struct UnionMerge: MergeStrategy {
-    public typealias Value = Snapshot
-
+public struct UnionMerge: SnapshotMergeStrategy {
     public init() {}
 
     public func merge(base: Snapshot, ours: Snapshot, theirs: Snapshot) throws(MergeConflict<Snapshot>) -> Snapshot {

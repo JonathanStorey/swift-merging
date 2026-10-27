@@ -1,8 +1,6 @@
 /// Merges text word by word, so edits to different words combine and edits to the same word conflict.
 /// Needs a base.
-public struct WordMerge: MergeStrategy {
-    public typealias Value = Snapshot
-
+public struct WordMerge: SnapshotMergeStrategy {
     public init() {}
 
     public func merge(base: Snapshot, ours: Snapshot, theirs: Snapshot) throws(MergeConflict<Snapshot>) -> Snapshot {

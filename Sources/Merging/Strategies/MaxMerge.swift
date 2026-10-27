@@ -1,9 +1,7 @@
 /// Keeps the larger value: numbers by value, text alphabetically, and dates by time, since they're stored
 /// as numbers. Merges with or without a base. Anything else is a conflict, so for a type of your own,
 /// write a typed strategy that uses its `<`.
-public struct MaxMerge: MergeStrategy {
-    public typealias Value = Snapshot
-
+public struct MaxMerge: SnapshotMergeStrategy {
     public init() {}
 
     public func merge(base: Snapshot, ours: Snapshot, theirs: Snapshot) throws(MergeConflict<Snapshot>) -> Snapshot {

@@ -3,8 +3,8 @@
 /// decides only when both sides changed the property.
 ///
 /// Implement the three-way merge, and the two-way merge too if the strategy needs no ancestor. A typed
-/// strategy's value is the property's type. A strategy whose value is `Snapshot` merges any property by its
-/// stored form, as the standard ones such as `.maximum` do.
+/// strategy's value is the property's type. A `SnapshotMergeStrategy` merges a property's stored form instead,
+/// as the standard ones such as `.maximum` do.
 ///
 /// ```swift
 /// struct LongerMerge: MergeStrategy {

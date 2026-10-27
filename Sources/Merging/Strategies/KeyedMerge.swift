@@ -1,8 +1,6 @@
 /// Merges a dictionary key by key, whatever the key's type: a key only one side changed, added, or removed
 /// keeps that side, and a key both sides changed merges its values.
-public struct KeyedMerge: MergeStrategy {
-    public typealias Value = Snapshot
-
+public struct KeyedMerge: SnapshotMergeStrategy {
     public init() {}
 
     public func merge(base: Snapshot, ours: Snapshot, theirs: Snapshot) throws(MergeConflict<Snapshot>) -> Snapshot {

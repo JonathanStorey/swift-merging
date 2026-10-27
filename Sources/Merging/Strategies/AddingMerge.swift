@@ -1,8 +1,6 @@
 /// Adds both sides' changes to the base, as a counter does, so two increments of one both count. Needs a
 /// base, and a whole number that would overflow is a conflict.
-public struct AddingMerge: MergeStrategy {
-    public typealias Value = Snapshot
-
+public struct AddingMerge: SnapshotMergeStrategy {
     public init() {}
 
     public func merge(base: Snapshot, ours: Snapshot, theirs: Snapshot) throws(MergeConflict<Snapshot>) -> Snapshot {

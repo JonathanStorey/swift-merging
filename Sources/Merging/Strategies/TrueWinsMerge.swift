@@ -1,7 +1,5 @@
 /// `true` if either side is. Merges with or without a base.
-public struct TrueWinsMerge: MergeStrategy {
-    public typealias Value = Snapshot
-
+public struct TrueWinsMerge: SnapshotMergeStrategy {
     public init() {}
 
     public func merge(base: Snapshot, ours: Snapshot, theirs: Snapshot) throws(MergeConflict<Snapshot>) -> Snapshot {

@@ -20,7 +20,7 @@ public struct Merged<Value: Codable & Sendable, Strategy: MergeStrategy>: Sendab
     /// Merges with a strategy on the property's `Snapshot`, for any type. A snapshot strategy calls this
     /// from an initializer of its own that names the types it suits, so `@Merged(.byWord) var count = 0`
     /// doesn't compile.
-    public init(wrappedValue: Value, unchecked strategy: Strategy) where Strategy.Value == Snapshot {
+    public init(wrappedValue: Value, unchecked strategy: Strategy) where Strategy: SnapshotMergeStrategy {
         self.wrappedValue = wrappedValue
     }
 }
