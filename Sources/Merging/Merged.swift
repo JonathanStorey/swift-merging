@@ -4,8 +4,8 @@
 /// ```swift
 /// struct Player: Codable, Mergeable {
 ///     var name = ""
-///     @Merged(.maximum) var highScore = 0                 // a standard strategy, on the stored form
-///     @Merged(LongerMerge()) var title = ""           // a typed strategy, on the property's own type
+///     @Merged(.maximum) var highScore = 0             // a standard strategy
+///     @Merged(LongerMerge()) var title = ""           // a strategy of your own
 /// }
 /// ```
 @propertyWrapper
@@ -18,9 +18,16 @@ public struct Merged<Value: Codable & Sendable, Strategy: MergeStrategy>: Sendab
     }
 
     /// Merges with a strategy on the property's `CodableTree`, for any type. A tree strategy calls this
-    /// from an initializer of its own that names the types it suits, so `@Merged(.byWord) var count = 0`
-    /// doesn't compile.
+    /// from an initializer of its own that names the types it suits, so a mismatch doesn't compile.
     public init(wrappedValue: Value, unchecked strategy: Strategy) where Strategy: TreeMergeStrategy {
+        self.wrappedValue = wrappedValue
+    }
+}
+
+extension Merged {
+    /// Merges with a shortcut, which a shortcut calls from an initializer of its own that names the types it
+    /// suits.
+    init(wrappedValue: Value, shortcut: Strategy) where Strategy: MergeShortcut {
         self.wrappedValue = wrappedValue
     }
 }
@@ -48,6 +55,7 @@ extension Merged: MergeRuled {
     /// The strategy, made with `init()`, so it's the same whether the value was set or decoded. One of the
     /// initializers guarantees `Strategy.Value` is `Value` or `CodableTree`.
     var mergeRule: MergeRule {
+        if let shortcut = Strategy.self as? any MergeShortcut.Type { return shortcut.rule(for: Value.self) }
         let strategy = Strategy()
         if Strategy.Value.self == CodableTree.self {
             return MergeRule { ours, theirs, base throws(MergeConflict<MergeTree>) in

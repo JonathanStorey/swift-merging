@@ -1,5 +1,6 @@
-/// A strategy that merges a property's `CodableTree`, its stored form, rather than its own type. The standard
-/// strategies, such as `.maximum`, are tree strategies.
+/// A strategy that merges a property's `CodableTree`, its stored form, rather than its own type, so one
+/// strategy suits many types. Give it an initializer on `Merged` that names the types it suits and calls
+/// `init(wrappedValue:unchecked:)`.
 public protocol TreeMergeStrategy: MergeStrategy where Value == CodableTree {}
 
 extension TreeMergeStrategy {
@@ -7,7 +8,7 @@ extension TreeMergeStrategy {
     /// decoded. A result that doesn't decode is a conflict.
     ///
     /// ```swift
-    /// try MaxMerge().typed(as: Int.self).merge(base: 1, ours: 5, theirs: 3)    // 5
+    /// try LargerTree().typed(as: Int.self).merge(base: 1, ours: 5, theirs: 3)    // 5
     /// ```
     public func typed<T: Codable & Sendable>(as type: T.Type) -> TypedMerge<Self, T> {
         TypedMerge()

@@ -9,10 +9,10 @@ struct Level: Codable, Comparable, Sendable {
 
 struct Game: Codable, Equatable, Mergeable {
     @Merged(.maximum) var highScore = 10
-    @Merged(Larger()) var level = Level(number: 1)
+    @Merged(.maximum) var level = Level(number: 1)
     @Merged(.maximum) var lastSeen = Date(timeIntervalSinceReferenceDate: 100)
-    @Merged(.adding) var wins = 3
-    @Merged(.adding) var distance = 1.5
+    @Merged(.sum) var wins = 3
+    @Merged(.sum) var distance = 1.5
     @Merged(.trueWins) var flagged = false
     @Merged(.byWord) var note = "the quick brown fox"
 }
@@ -29,7 +29,7 @@ struct Game: Codable, Equatable, Mergeable {
         return try mine.merging(other, base: base)
     }
 
-    @Test func maxKeepsTheLargerAndATypedStrategyUsesTheTypesOrder() throws {
+    @Test func maximumKeepsTheLargerByTheTypesOwnOrder() throws {
         let merged = try merge({ $0.highScore = 30; $0.level = Level(number: 5); $0.lastSeen = Date(timeIntervalSinceReferenceDate: 300) },
                                { $0.highScore = 20; $0.level = Level(number: 3); $0.lastSeen = Date(timeIntervalSinceReferenceDate: 200) })
         #expect(merged.highScore == 30)
@@ -37,13 +37,13 @@ struct Game: Codable, Equatable, Mergeable {
         #expect(merged.lastSeen == Date(timeIntervalSinceReferenceDate: 300))
     }
 
-    @Test func addingCountsBothSides() throws {
+    @Test func sumCountsBothSides() throws {
         let merged = try merge({ $0.wins += 2; $0.distance += 1 }, { $0.wins += 1; $0.distance += 0.5 })
         #expect(merged.wins == 6)
         #expect(merged.distance == 3)
     }
 
-    @Test func addingThatOverflowsIsAConflict() {
+    @Test func sumThatOverflowsIsAConflict() {
         var start = base
         start.wins = .max - 1
         var ours = start
@@ -81,7 +81,7 @@ struct Game: Codable, Equatable, Mergeable {
 
     @Test func wordsJoinBackToTheText() {
         let text = "  Hello, world!  Don't stop.\r\nNew line"
-        #expect(WordMerge.words(text).array?.compactMap(\.string) == ["  ", "Hello, ", "world!  ", "Don't ", "stop.\r\n", "New ", "line"])
+        #expect(StringWordMerge<String>.words(text) == ["  ", "Hello, ", "world!  ", "Don't ", "stop.\r\n", "New ", "line"])
     }
 }
 
@@ -96,36 +96,51 @@ struct Game: Codable, Equatable, Mergeable {
     }
 }
 
-@Suite struct StrategyTypeTests {
-    struct Mixed: Codable, Mergeable {
-        @Merged(.maximum) var level = Level(number: 1)
+/// Keeps the larger number, working on the stored form.
+struct LargerTree: TreeMergeStrategy {
+    func merge(base: CodableTree, ours: CodableTree, theirs: CodableTree) throws(MergeConflict<CodableTree>) -> CodableTree {
+        guard let mine = ours.double, let other = theirs.double else { throw MergeConflict(base: base, ours: ours, theirs: theirs) }
+        return mine < other ? theirs : ours
     }
+}
 
-    @Test func maxOnAStructIsAConflict() {
-        var ours = Mixed()
-        ours.level = Level(number: 2)
-        var theirs = Mixed()
-        theirs.level = Level(number: 3)
-        #expect(throws: MergeConflict<Mixed>.self) { try ours.merging(theirs, base: Mixed()) }
+extension Merged where Strategy == LargerTree {
+    init(wrappedValue: Value, _ strategy: LargerTree) where Value: Numeric {
+        self.init(wrappedValue: wrappedValue, unchecked: strategy)
+    }
+}
+
+@Suite struct TypedStrategyTests {
+    @Test func strategiesMergePlainValues() throws {
+        #expect(ComparableMaximumMerge<Int>().merge(base: 1, ours: 5, theirs: 3) == 5)
+        #expect(try StringWordMerge<String>().merge(base: "a b c", ours: "x b c", theirs: "a b z") == "x b z")
+        #expect(try StringWordMerge<Substring>().merge(base: "a b", ours: "x b", theirs: "a z") == "x z")
+        #expect(throws: MergeConflict<Int>.self) { try NumericSumMerge<Int>().merge(ours: 1, theirs: 2) }
+        #expect(SetAlgebraUnionMerge<Set<Int>>().merge(ours: [1], theirs: [2]) == [1, 2])
+        #expect(try DictionaryKeyedMerge<[String: Int]>().merge(base: ["a": 1], ours: ["a": 1, "b": 2], theirs: [:]) == ["b": 2])
     }
 }
 
 @Suite struct TypedMergeTests {
-    @Test func aTreeStrategyMergesPlainValues() throws {
-        #expect(try MaxMerge().typed(as: Int.self).merge(base: 1, ours: 5, theirs: 3) == 5)
-        #expect(try WordMerge().typed(as: String.self).merge(base: "a b c", ours: "x b c", theirs: "a b z") == "x b z")
-        #expect(throws: MergeConflict<Int>.self) { try AddingMerge().typed(as: Int.self).merge(ours: 1, theirs: 2) }
-    }
-
     struct Score: Codable, Mergeable {
-        @Merged(MaxMerge().typed(as: Int.self)) var best = 0
+        @Merged(LargerTree()) var best = 0
+        @Merged(LargerTree().typed(as: Int.self)) var worst = 0
     }
 
-    @Test func aTypedTreeStrategyWorksInMerged() throws {
+    @Test func aTreeStrategyMergesPlainValues() throws {
+        #expect(try LargerTree().typed(as: Int.self).merge(base: 1, ours: 5, theirs: 3) == 5)
+        #expect(throws: MergeConflict<String>.self) { try LargerTree().typed(as: String.self).merge(base: "a", ours: "b", theirs: "c") }
+    }
+
+    @Test func aTreeStrategyWorksInMerged() throws {
         var ours = Score()
         ours.best = 7
+        ours.worst = 7
         var theirs = Score()
         theirs.best = 4
-        #expect(try ours.merging(theirs, base: Score()).best == 7)
+        theirs.worst = 4
+        let merged = try ours.merging(theirs, base: Score())
+        #expect(merged.best == 7)
+        #expect(merged.worst == 7)
     }
 }

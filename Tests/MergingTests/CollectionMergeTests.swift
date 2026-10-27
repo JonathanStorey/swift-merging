@@ -6,6 +6,13 @@ struct Spot: Codable, Hashable {
     var y: Int
 }
 
+struct Shipping: OptionSet, Codable, Sendable, Hashable {
+    let rawValue: Int
+    static let fast = Shipping(rawValue: 1)
+    static let gift = Shipping(rawValue: 2)
+    static let signed = Shipping(rawValue: 4)
+}
+
 struct Board: Codable, Equatable, Mergeable {
     var tags: Set<String> = ["a", "b", "c"]
     var pins: [Spot: String] = [Spot(x: 0, y: 0): "home"]
@@ -82,16 +89,21 @@ struct Board: Codable, Equatable, Mergeable {
 
 @Suite struct CollectionStrategyTests {
     struct Note: Codable, Equatable, Mergeable {
-        @Merged(.byMembership) var tags = ["a", "b", "c"]
+        @Merged(.byMembership) var tags: Set<String> = ["a", "b", "c"]
+        @Merged(.byMembership) var shipping: Shipping = [.fast]
         @Merged(.byKey) var scores: [Spot: Int] = [Spot(x: 0, y: 0): 1]
     }
 
-    @Test func anArrayMergesAsASet() throws {
+    @Test func setsMergeByMembership() throws {
         var ours = Note()
         ours.tags = ["c", "a", "ours"]
+        ours.shipping = [.fast, .gift]
         var theirs = Note()
-        theirs.tags = ["b", "a", "c", "theirs"].filter { $0 != "c" }
-        #expect(try ours.merging(theirs, base: Note()).tags == ["a", "ours", "theirs"])
+        theirs.tags = ["b", "a", "theirs"]
+        theirs.shipping = [.signed]
+        let merged = try ours.merging(theirs, base: Note())
+        #expect(merged.tags == ["a", "ours", "theirs"])
+        #expect(merged.shipping == [.gift, .signed])
     }
 
     @Test func aDictionaryMergesByKeyWhenNamed() throws {
@@ -105,7 +117,7 @@ struct Board: Codable, Equatable, Mergeable {
 
 @Suite struct UnionMergeTests {
     struct Mail: Codable, Equatable, Mergeable {
-        @Merged(.union) var recipients = ["ana", "bo"]
+        @Merged(.union) var recipients: Set<String> = ["ana", "bo"]
         @Merged(.union) var labels: Set<String> = ["inbox"]
     }
 
