@@ -1,37 +1,37 @@
 /// Decodes a value from a `MergeTree`.
-struct SnapshotDecoder {
-    func decode<T: Decodable>(_ type: T.Type, from snapshot: MergeTree) throws -> T {
-        try Reader(snapshot, codingPath: []).read(type)
+struct TreeDecoder {
+    func decode<T: Decodable>(_ type: T.Type, from tree: MergeTree) throws -> T {
+        try Reader(tree, codingPath: []).read(type)
     }
 }
 
-/// The decoder for one value in a snapshot.
+/// The decoder for one value in a tree.
 private struct Reader: Decoder {
-    let snapshot: MergeTree
+    let tree: MergeTree
     let codingPath: [any CodingKey]
     var userInfo: [CodingUserInfoKey: Any] { [:] }
 
-    init(_ snapshot: MergeTree, codingPath: [any CodingKey]) {
-        var snapshot = snapshot
-        while case .merged(let data, _) = snapshot { snapshot = data }
-        self.snapshot = snapshot
+    init(_ tree: MergeTree, codingPath: [any CodingKey]) {
+        var tree = tree
+        while case .merged(let data, _) = tree { tree = data }
+        self.tree = tree
         self.codingPath = codingPath
     }
 
-    var isNull: Bool { snapshot == .null }
+    var isNull: Bool { tree == .null }
 
     func read(_ type: Bool.Type) throws -> Bool {
-        guard case .bool(let value) = snapshot else { throw mismatch(type) }
+        guard case .bool(let value) = tree else { throw mismatch(type) }
         return value
     }
 
     func read(_ type: String.Type) throws -> String {
-        guard case .string(let value) = snapshot else { throw mismatch(type) }
+        guard case .string(let value) = tree else { throw mismatch(type) }
         return value
     }
 
     func read(_ type: Double.Type) throws -> Double {
-        switch snapshot {
+        switch tree {
         case .double(let value): value
         case .int(let value): Double(value)
         case .uint(let value): Double(value)
@@ -44,7 +44,7 @@ private struct Reader: Decoder {
     }
 
     func read<T: FixedWidthInteger & Decodable>(_ type: T.Type) throws -> T {
-        let value: T? = switch snapshot {
+        let value: T? = switch tree {
         case .int(let value): T(exactly: value)
         case .uint(let value): T(exactly: value)
         case .double(let value): T(exactly: value)
@@ -59,16 +59,16 @@ private struct Reader: Decoder {
     }
 
     func mismatch(_ type: Any.Type) -> DecodingError {
-        DecodingError.typeMismatch(type, DecodingError.Context(codingPath: codingPath, debugDescription: "Found \(snapshot)"))
+        DecodingError.typeMismatch(type, DecodingError.Context(codingPath: codingPath, debugDescription: "Found \(tree)"))
     }
 
     func container<Key: CodingKey>(keyedBy type: Key.Type) throws -> KeyedDecodingContainer<Key> {
-        guard case .object(let object) = snapshot else { throw mismatch([String: Any].self) }
+        guard case .object(let object) = tree else { throw mismatch([String: Any].self) }
         return KeyedDecodingContainer(KeyedContainer(object: object, codingPath: codingPath))
     }
 
     func unkeyedContainer() throws -> any UnkeyedDecodingContainer {
-        guard case .array(let array) = snapshot else { throw mismatch([Any].self) }
+        guard case .array(let array) = tree else { throw mismatch([Any].self) }
         return UnkeyedContainer(array: array, codingPath: codingPath)
     }
 
@@ -134,7 +134,7 @@ private struct KeyedContainer<Key: CodingKey>: KeyedDecodingContainerProtocol {
         try reader(forKey: key).unkeyedContainer()
     }
 
-    func superDecoder() throws -> any Decoder { try reader(forKey: SnapshotKey.super) }
+    func superDecoder() throws -> any Decoder { try reader(forKey: TreeKey.super) }
     func superDecoder(forKey key: Key) throws -> any Decoder { try reader(forKey: key) }
 }
 
@@ -153,7 +153,7 @@ private struct UnkeyedContainer: UnkeyedDecodingContainer {
 
     /// The reader for the next element, moving past it.
     mutating func next(_ type: Any.Type) throws -> Reader {
-        let key = SnapshotKey(intValue: currentIndex)
+        let key = TreeKey(intValue: currentIndex)
         guard !isAtEnd else {
             throw DecodingError.valueNotFound(type, DecodingError.Context(codingPath: codingPath + [key], debugDescription: "No more elements"))
         }

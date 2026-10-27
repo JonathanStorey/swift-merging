@@ -1,20 +1,20 @@
 /// Merges a set, or an array treated as one, by what each side added and removed: an element is kept if
 /// either side added it, and removed if either side removed it. Order doesn't matter. Without a base,
 /// only equal sets merge.
-public struct MembershipMerge: SnapshotMergeStrategy {
+public struct MembershipMerge: TreeMergeStrategy {
     public init() {}
 
-    public func merge(base: Snapshot, ours: Snapshot, theirs: Snapshot) throws(MergeConflict<Snapshot>) -> Snapshot {
+    public func merge(base: CodableTree, ours: CodableTree, theirs: CodableTree) throws(MergeConflict<CodableTree>) -> CodableTree {
         do {
-            return Snapshot(try MergeTree.mergeSets(MergeTree(ours), MergeTree(theirs), base: MergeTree(base)))
+            return CodableTree(try MergeTree.mergeSets(MergeTree(ours), MergeTree(theirs), base: MergeTree(base)))
         } catch {
             throw MergeConflict(base: base, ours: ours, theirs: theirs)
         }
     }
 
-    public func merge(ours: Snapshot, theirs: Snapshot) throws(MergeConflict<Snapshot>) -> Snapshot {
+    public func merge(ours: CodableTree, theirs: CodableTree) throws(MergeConflict<CodableTree>) -> CodableTree {
         do {
-            return Snapshot(try MergeTree.mergeSets(MergeTree(ours), MergeTree(theirs), base: nil))
+            return CodableTree(try MergeTree.mergeSets(MergeTree(ours), MergeTree(theirs), base: nil))
         } catch {
             throw MergeConflict(ours: ours, theirs: theirs)
         }

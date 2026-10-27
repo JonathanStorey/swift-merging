@@ -1,5 +1,5 @@
 /// Encodes a value as a `MergeTree`.
-struct SnapshotEncoder {
+struct TreeEncoder {
     /// Whether the value is part of a larger one, so a `Mergeable` value brings its own merge. The value
     /// being merged leaves it off, or its merge would call itself.
     var isPart = false
@@ -7,11 +7,11 @@ struct SnapshotEncoder {
     func encode<T: Encodable>(_ value: T) throws -> MergeTree {
         let node = Node(codingPath: [], isPart: isPart)
         try node.store(value)
-        return node.snapshot
+        return node.tree
     }
 }
 
-/// The encoder for one value in the snapshot being built. Containers add child nodes for their keys or
+/// The encoder for one value in the tree being built. Containers add child nodes for their keys or
 /// elements, so nested values can be written in any order.
 private final class Node: Encoder {
     let codingPath: [any CodingKey]
@@ -27,8 +27,8 @@ private final class Node: Encoder {
         self.isPart = isPart
     }
 
-    var snapshot: MergeTree {
-        let data: MergeTree = if let keyed { .object(keyed.mapValues(\.snapshot)) } else if let unkeyed { .array(unkeyed.map(\.snapshot)) } else { value ?? .null }
+    var tree: MergeTree {
+        let data: MergeTree = if let keyed { .object(keyed.mapValues(\.tree)) } else if let unkeyed { .array(unkeyed.map(\.tree)) } else { value ?? .null }
         return rule.map { .merged(data, $0) } ?? data
     }
 
@@ -66,7 +66,7 @@ private final class Node: Encoder {
 
     func appendChild() -> Node {
         if unkeyed == nil { unkeyed = [] }
-        let child = Node(codingPath: codingPath + [SnapshotKey(intValue: unkeyed!.count)])
+        let child = Node(codingPath: codingPath + [TreeKey(intValue: unkeyed!.count)])
         unkeyed!.append(child)
         return child
     }
@@ -119,7 +119,7 @@ private struct KeyedContainer<Key: CodingKey>: KeyedEncodingContainerProtocol {
         node.child(forKey: key).unkeyedContainer()
     }
 
-    mutating func superEncoder() -> any Encoder { node.child(forKey: SnapshotKey.super) }
+    mutating func superEncoder() -> any Encoder { node.child(forKey: TreeKey.super) }
     mutating func superEncoder(forKey key: Key) -> any Encoder { node.child(forKey: key) }
 }
 

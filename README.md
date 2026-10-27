@@ -28,7 +28,7 @@ unless the type knows how to merge without one.
 
 There are three ways to conform, from least to most code:
 
-1. **A `Codable` type conforms with no code.** It merges through a snapshot of its encoded form, without
+1. **A `Codable` type conforms with no code.** It merges through a tree of its encoded form, without
    going through JSON text. A property only one side changed keeps that side. Where both changed it, a
    `Mergeable` property merges by its type's own merge, an object or dictionary key by key, an array
    element by element (both sides' insertions kept, ours first), a set by keeping what either side added
@@ -51,7 +51,7 @@ struct Booking: Codable, Mergeable {
 }
 ```
 
-The snapshot merge encodes and decodes on every merge, which suits syncing rather than tight loops.
+The tree merge encodes and decodes on every merge, which suits syncing rather than tight loops.
 
 ## Strategies
 
@@ -74,8 +74,8 @@ unit is merged, and the others say what wins.
 A strategy decides only when both sides changed a property, even to the same value, so two increments of
 a counter both count. `.maximum` and `.trueWins` also merge without a base. `.adding` and `.byWord` need one.
 
-The standard strategies work on a property's `Snapshot`, its stored form, and each declares the types it
-suits, so a mismatch such as `@Merged(.byWord) var count = 0` doesn't compile. A `SnapshotMergeStrategy` of
+The standard strategies work on a property's `CodableTree`, its stored form, and each declares the types it
+suits, so a mismatch such as `@Merged(.byWord) var count = 0` doesn't compile. A `TreeMergeStrategy` of
 your own does the same with one initializer:
 
 ```swift
@@ -89,7 +89,7 @@ extension Merged where Strategy == ShoutMerge {
 `.maximum` accepts any `Comparable`, but compares the stored form, so a struct of your own is a conflict.
 Give it a typed strategy instead.
 
-`typed(as:)` turns a snapshot strategy into a typed one, to merge plain values with it:
+`typed(as:)` turns a tree strategy into a typed one, to merge plain values with it:
 
 ```swift
 try MaxMerge().typed(as: Int.self).merge(base: 1, ours: 5, theirs: 3)    // 5
@@ -125,16 +125,16 @@ doesn't throw names its value with `typealias Value`.
 On Swift 6.1, a generic strategy that throws a conflict of a collection type, such as
 `MergeConflict<Set<Element>>`, crashes the compiler. Swift 6.2 fixes it.
 
-## Snapshot
+## CodableTree
 
-`Snapshot` is a value's stored form, as JSON would hold it: `null`, `bool`, `int`, `uint`, `double`,
+`CodableTree` is a value's stored form, as JSON would hold it: `null`, `bool`, `int`, `uint`, `double`,
 `string`, `array`, or `object`.
 
 ```swift
-let snapshot = try Snapshot(encoding: point)      // {"x": 1, "y": 2.5}
-snapshot["x"]?.int                                // 1
-let copy = try snapshot.decode(as: Point.self)
-let literal: Snapshot = ["tags": ["a", "b"], "count": 2]
+let tree = try CodableTree(encoding: point)      // {"x": 1, "y": 2.5}
+tree["x"]?.int                                   // 1
+let copy = try tree.decode(as: Point.self)
+let literal: CodableTree = ["tags": ["a", "b"], "count": 2]
 ```
 
 ## Requirements

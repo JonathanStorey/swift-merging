@@ -26,17 +26,17 @@ struct Profile: Codable, Equatable, Mergeable {
     var ratio: Float = 0.1
 }
 
-@Suite struct SnapshotCodingTests {
+@Suite struct TreeCodingTests {
     @Test func aValueRoundTrips() throws {
         var profile = Profile()
         profile.nickname = "Annie"
         profile.status = .scheduled(at: Date(timeIntervalSinceReferenceDate: 1234.5))
-        let snapshot = try SnapshotEncoder().encode(profile)
-        #expect(try SnapshotDecoder().decode(Profile.self, from: snapshot) == profile)
+        let tree = try TreeEncoder().encode(profile)
+        #expect(try TreeDecoder().decode(Profile.self, from: tree) == profile)
     }
 
     @Test func aMissingOptionalIsLeftOut() throws {
-        guard case .object(let object) = try SnapshotEncoder().encode(Profile()) else {
+        guard case .object(let object) = try TreeEncoder().encode(Profile()) else {
             Issue.record("Expected an object")
             return
         }
@@ -46,7 +46,7 @@ struct Profile: Codable, Equatable, Mergeable {
     }
 
     @Test func aWrongTypeFailsToDecode() {
-        #expect(throws: DecodingError.self) { try SnapshotDecoder().decode(Profile.self, from: .object(["name": .int(1)])) }
+        #expect(throws: DecodingError.self) { try TreeDecoder().decode(Profile.self, from: .object(["name": .int(1)])) }
     }
 }
 
@@ -120,7 +120,7 @@ struct Profile: Codable, Equatable, Mergeable {
         #expect(throws: MergeConflict<Profile>.self) { try base.merging(theirs) }
     }
 
-    @Test func aCodablePropertyOfAMergeableStructMergesByItsSnapshot() throws {
+    @Test func aCodablePropertyOfAMergeableStructMergesByItsTree() throws {
         var ours = Team()
         ours.lead.name = "Bo"
         var theirs = Team()
@@ -135,11 +135,11 @@ struct Team: Codable, Mergeable {
     var lead = Profile()
 }
 
-@Suite struct SnapshotArrayMergeTests {
+@Suite struct TreeArrayMergeTests {
     @Test func bothReplacingAnElementDifferentlyIsAConflictNamingIt() {
-        let base = Snapshot.array([.string("a"), .string("b")])
-        let ours = Snapshot.array([.string("a"), .string("x")])
-        let theirs = Snapshot.array([.string("a"), .string("y")])
+        let base = CodableTree.array([.string("a"), .string("b")])
+        let ours = CodableTree.array([.string("a"), .string("x")])
+        let theirs = CodableTree.array([.string("a"), .string("y")])
         do {
             _ = try ours.merging(theirs, base: base)
             Issue.record("Expected a conflict")
@@ -151,33 +151,33 @@ struct Team: Codable, Mergeable {
     }
 
     @Test func oneSideChangingAndTheOtherRemovingKeepsTheChange() throws {
-        let base = Snapshot.array([.string("a"), .string("b"), .string("c")])
-        let ours = Snapshot.array([.string("a"), .string("B"), .string("c")])
-        let theirs = Snapshot.array([.string("a"), .string("c")])
+        let base = CodableTree.array([.string("a"), .string("b"), .string("c")])
+        let ours = CodableTree.array([.string("a"), .string("B"), .string("c")])
+        let theirs = CodableTree.array([.string("a"), .string("c")])
         #expect(try ours.merging(theirs, base: base) == .array([.string("a"), .string("B"), .string("c")]))
     }
 }
 
-@Suite struct PublicSnapshotTests {
+@Suite struct PublicCodableTreeTests {
     struct Point: Codable, Equatable {
         var x: Int
         var y: Double
         var name: String?
     }
 
-    @Test func aSnapshotShowsWhatItHolds() throws {
-        let snapshot = try Snapshot(encoding: Point(x: 1, y: 2.5, name: "A"))
-        #expect(snapshot["x"]?.int == 1)
-        #expect(snapshot["y"]?.double == 2.5)
-        #expect(snapshot["name"]?.string == "A")
-        #expect(snapshot.description == #"{"name": "A", "x": 1, "y": 2.5}"#)
-        #expect(try snapshot.decode(as: Point.self) == Point(x: 1, y: 2.5, name: "A"))
+    @Test func aTreeShowsWhatItHolds() throws {
+        let tree = try CodableTree(encoding: Point(x: 1, y: 2.5, name: "A"))
+        #expect(tree["x"]?.int == 1)
+        #expect(tree["y"]?.double == 2.5)
+        #expect(tree["name"]?.string == "A")
+        #expect(tree.description == #"{"name": "A", "x": 1, "y": 2.5}"#)
+        #expect(try tree.decode(as: Point.self) == Point(x: 1, y: 2.5, name: "A"))
     }
 
-    @Test func literalsBuildSnapshots() {
-        let snapshot: Snapshot = ["tags": ["a", 1, 2.5, true, nil]]
-        #expect(snapshot["tags"]?[1] == .int(1))
-        #expect(snapshot["tags"]?[4]?.isNull == true)
-        #expect(snapshot["missing"] == nil)
+    @Test func literalsBuildTrees() {
+        let tree: CodableTree = ["tags": ["a", 1, 2.5, true, nil]]
+        #expect(tree["tags"]?[1] == .int(1))
+        #expect(tree["tags"]?[4]?.isNull == true)
+        #expect(tree["missing"] == nil)
     }
 }

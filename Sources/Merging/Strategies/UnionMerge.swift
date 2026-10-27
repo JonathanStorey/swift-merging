@@ -2,14 +2,14 @@
 /// membership, keeping what either side added and dropping what either removed. Without one, there's no
 /// telling an addition from a removal, so it keeps every element either side has: ours in order, then
 /// theirs that ours lacks.
-public struct UnionMerge: SnapshotMergeStrategy {
+public struct UnionMerge: TreeMergeStrategy {
     public init() {}
 
-    public func merge(base: Snapshot, ours: Snapshot, theirs: Snapshot) throws(MergeConflict<Snapshot>) -> Snapshot {
+    public func merge(base: CodableTree, ours: CodableTree, theirs: CodableTree) throws(MergeConflict<CodableTree>) -> CodableTree {
         try MembershipMerge().merge(base: base, ours: ours, theirs: theirs)
     }
 
-    public func merge(ours: Snapshot, theirs: Snapshot) throws(MergeConflict<Snapshot>) -> Snapshot {
+    public func merge(ours: CodableTree, theirs: CodableTree) throws(MergeConflict<CodableTree>) -> CodableTree {
         guard let mine = ours.array, let other = theirs.array else { throw MergeConflict(ours: ours, theirs: theirs) }
         let mineKeys = Set(mine.map { MergeTree($0).canonical })
         return .array(mine + other.filter { !mineKeys.contains(MergeTree($0).canonical) })

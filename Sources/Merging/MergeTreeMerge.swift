@@ -1,7 +1,7 @@
-/// A snapshot merges like any other value, and a conflict holds the part that clashed, with an absent
+/// A tree merges like any other value, and a conflict holds the part that clashed, with an absent
 /// object key shown as `null`.
 extension MergeTree: Mergeable {
-    /// Merges `theirs` into this snapshot, which is ours, knowing their common ancestor. A part only one side
+    /// Merges `theirs` into this tree, which is ours, knowing their common ancestor. A part only one side
     /// changed keeps that side. Where both did, a part with a rule merges by it, objects merge key by key and
     /// arrays element by element, and anything else is a conflict.
     func merging(_ theirs: MergeTree, base: MergeTree) throws(MergeConflict<MergeTree>) -> MergeTree {

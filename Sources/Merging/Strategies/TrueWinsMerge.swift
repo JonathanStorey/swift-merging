@@ -1,12 +1,12 @@
 /// `true` if either side is. Merges with or without a base.
-public struct TrueWinsMerge: SnapshotMergeStrategy {
+public struct TrueWinsMerge: TreeMergeStrategy {
     public init() {}
 
-    public func merge(base: Snapshot, ours: Snapshot, theirs: Snapshot) throws(MergeConflict<Snapshot>) -> Snapshot {
+    public func merge(base: CodableTree, ours: CodableTree, theirs: CodableTree) throws(MergeConflict<CodableTree>) -> CodableTree {
         try merge(ours: ours, theirs: theirs)
     }
 
-    public func merge(ours: Snapshot, theirs: Snapshot) throws(MergeConflict<Snapshot>) -> Snapshot {
+    public func merge(ours: CodableTree, theirs: CodableTree) throws(MergeConflict<CodableTree>) -> CodableTree {
         guard let mine = ours.bool, let other = theirs.bool else { throw MergeConflict(ours: ours, theirs: theirs) }
         return .bool(mine || other)
     }

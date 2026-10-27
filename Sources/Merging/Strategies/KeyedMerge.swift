@@ -1,19 +1,19 @@
 /// Merges a dictionary key by key, whatever the key's type: a key only one side changed, added, or removed
 /// keeps that side, and a key both sides changed merges its values.
-public struct KeyedMerge: SnapshotMergeStrategy {
+public struct KeyedMerge: TreeMergeStrategy {
     public init() {}
 
-    public func merge(base: Snapshot, ours: Snapshot, theirs: Snapshot) throws(MergeConflict<Snapshot>) -> Snapshot {
+    public func merge(base: CodableTree, ours: CodableTree, theirs: CodableTree) throws(MergeConflict<CodableTree>) -> CodableTree {
         do {
-            return Snapshot(try MergeTree.mergeDictionaries(MergeTree(ours), MergeTree(theirs), base: MergeTree(base)))
+            return CodableTree(try MergeTree.mergeDictionaries(MergeTree(ours), MergeTree(theirs), base: MergeTree(base)))
         } catch {
             throw MergeConflict(base: base, ours: ours, theirs: theirs)
         }
     }
 
-    public func merge(ours: Snapshot, theirs: Snapshot) throws(MergeConflict<Snapshot>) -> Snapshot {
+    public func merge(ours: CodableTree, theirs: CodableTree) throws(MergeConflict<CodableTree>) -> CodableTree {
         do {
-            return Snapshot(try MergeTree.mergeDictionaries(MergeTree(ours), MergeTree(theirs), base: nil))
+            return CodableTree(try MergeTree.mergeDictionaries(MergeTree(ours), MergeTree(theirs), base: nil))
         } catch {
             throw MergeConflict(ours: ours, theirs: theirs)
         }
@@ -27,7 +27,7 @@ extension MergeStrategy where Self == KeyedMerge {
 
 /// Every dictionary merges by key. One with string or integer keys encodes as an object, which merges by
 /// key anyway. Any other encodes as a flat array of keys and values, which would mangle in an array merge.
-/// Merging the tree rather than a snapshot keeps the rules of the values inside.
+/// Merging the merge tree rather than a `CodableTree` keeps the rules of the values inside.
 extension Dictionary: DefaultMergeRule {
     static var defaultMergeRule: MergeRule {
         MergeRule { ours, theirs, base throws(MergeConflict<MergeTree>) in try MergeTree.mergeDictionaries(ours, theirs, base: base) }

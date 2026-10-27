@@ -1,9 +1,9 @@
 /// Adds both sides' changes to the base, as a counter does, so two increments of one both count. Needs a
 /// base, and a whole number that would overflow is a conflict.
-public struct AddingMerge: SnapshotMergeStrategy {
+public struct AddingMerge: TreeMergeStrategy {
     public init() {}
 
-    public func merge(base: Snapshot, ours: Snapshot, theirs: Snapshot) throws(MergeConflict<Snapshot>) -> Snapshot {
+    public func merge(base: CodableTree, ours: CodableTree, theirs: CodableTree) throws(MergeConflict<CodableTree>) -> CodableTree {
         if case .int(let original) = base, case .int(let mine) = ours, case .int(let other) = theirs {
             let (added, overflowed) = mine.addingReportingOverflow(other)
             let (sum, underflowed) = added.subtractingReportingOverflow(original)

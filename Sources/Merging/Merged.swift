@@ -17,10 +17,10 @@ public struct Merged<Value: Codable & Sendable, Strategy: MergeStrategy>: Sendab
         self.wrappedValue = wrappedValue
     }
 
-    /// Merges with a strategy on the property's `Snapshot`, for any type. A snapshot strategy calls this
+    /// Merges with a strategy on the property's `CodableTree`, for any type. A tree strategy calls this
     /// from an initializer of its own that names the types it suits, so `@Merged(.byWord) var count = 0`
     /// doesn't compile.
-    public init(wrappedValue: Value, unchecked strategy: Strategy) where Strategy: SnapshotMergeStrategy {
+    public init(wrappedValue: Value, unchecked strategy: Strategy) where Strategy: TreeMergeStrategy {
         self.wrappedValue = wrappedValue
     }
 }
@@ -46,19 +46,19 @@ extension Merged: Hashable where Value: Hashable {
 
 extension Merged: MergeRuled {
     /// The strategy, made with `init()`, so it's the same whether the value was set or decoded. One of the
-    /// initializers guarantees `Strategy.Value` is `Value` or `Snapshot`.
+    /// initializers guarantees `Strategy.Value` is `Value` or `CodableTree`.
     var mergeRule: MergeRule {
         let strategy = Strategy()
-        if Strategy.Value.self == Snapshot.self {
+        if Strategy.Value.self == CodableTree.self {
             return MergeRule { ours, theirs, base throws(MergeConflict<MergeTree>) in
                 do {
-                    let (mine, other) = (Snapshot(ours) as! Strategy.Value, Snapshot(theirs) as! Strategy.Value)
+                    let (mine, other) = (CodableTree(ours) as! Strategy.Value, CodableTree(theirs) as! Strategy.Value)
                     let merged = if let base {
-                        try strategy.merge(base: Snapshot(base) as! Strategy.Value, ours: mine, theirs: other)
+                        try strategy.merge(base: CodableTree(base) as! Strategy.Value, ours: mine, theirs: other)
                     } else {
                         try strategy.merge(ours: mine, theirs: other)
                     }
-                    return MergeTree(merged as! Snapshot)
+                    return MergeTree(merged as! CodableTree)
                 } catch {
                     throw MergeConflict(base: base, ours: ours, theirs: theirs)
                 }

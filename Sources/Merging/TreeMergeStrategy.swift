@@ -1,9 +1,9 @@
-/// A strategy that merges a property's `Snapshot`, its stored form, rather than its own type. The standard
-/// strategies, such as `.maximum`, are snapshot strategies.
-public protocol SnapshotMergeStrategy: MergeStrategy where Value == Snapshot {}
+/// A strategy that merges a property's `CodableTree`, its stored form, rather than its own type. The standard
+/// strategies, such as `.maximum`, are tree strategies.
+public protocol TreeMergeStrategy: MergeStrategy where Value == CodableTree {}
 
-extension SnapshotMergeStrategy {
-    /// This strategy as a typed one, for values of `type`: they're encoded, merged as snapshots, and
+extension TreeMergeStrategy {
+    /// This strategy as a typed one, for values of `type`: they're encoded, merged as trees, and
     /// decoded. A result that doesn't decode is a conflict.
     ///
     /// ```swift
@@ -14,13 +14,13 @@ extension SnapshotMergeStrategy {
     }
 }
 
-/// A snapshot strategy working on values of one type, made by `typed(as:)`.
-public struct TypedMerge<Strategy: SnapshotMergeStrategy, Value: Codable & Sendable>: MergeStrategy {
+/// A tree strategy working on values of one type, made by `typed(as:)`.
+public struct TypedMerge<Strategy: TreeMergeStrategy, Value: Codable & Sendable>: MergeStrategy {
     public init() {}
 
     public func merge(base: Value, ours: Value, theirs: Value) throws(MergeConflict<Value>) -> Value {
         do {
-            let merged = try Strategy().merge(base: Snapshot(encoding: base), ours: Snapshot(encoding: ours), theirs: Snapshot(encoding: theirs))
+            let merged = try Strategy().merge(base: CodableTree(encoding: base), ours: CodableTree(encoding: ours), theirs: CodableTree(encoding: theirs))
             return try merged.decode(as: Value.self)
         } catch {
             throw MergeConflict(base: base, ours: ours, theirs: theirs)
@@ -29,7 +29,7 @@ public struct TypedMerge<Strategy: SnapshotMergeStrategy, Value: Codable & Senda
 
     public func merge(ours: Value, theirs: Value) throws(MergeConflict<Value>) -> Value {
         do {
-            let merged = try Strategy().merge(ours: Snapshot(encoding: ours), theirs: Snapshot(encoding: theirs))
+            let merged = try Strategy().merge(ours: CodableTree(encoding: ours), theirs: CodableTree(encoding: theirs))
             return try merged.decode(as: Value.self)
         } catch {
             throw MergeConflict(ours: ours, theirs: theirs)

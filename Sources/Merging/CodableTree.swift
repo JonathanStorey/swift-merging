@@ -1,16 +1,16 @@
 /// A value's stored form, as JSON would hold it: what its `Codable` conformance encodes, without the
-/// formatting. Merging works on snapshots, and a strategy whose value is `Snapshot` merges any property
+/// formatting. Merging works on trees, and a strategy whose value is `CodableTree` merges any property
 /// by its stored form.
 ///
 /// ```swift
-/// let snapshot = try Snapshot(encoding: Point(x: 1, y: 2))   // {"x": 1, "y": 2}
-/// snapshot["x"]?.int                                         // 1
-/// let point = try snapshot.decode(as: Point.self)
+/// let tree = try CodableTree(encoding: Point(x: 1, y: 2))   // {"x": 1, "y": 2}
+/// tree["x"]?.int                                            // 1
+/// let point = try tree.decode(as: Point.self)
 /// ```
 ///
 /// Dates are stored as seconds since 2001, enums with raw values as their raw value, and an optional
 /// that's `nil` is left out of its object.
-public enum Snapshot: Hashable, Sendable {
+public enum CodableTree: Hashable, Sendable {
     case null
     case bool(Bool)
     /// A whole number, from any integer type.
@@ -21,20 +21,20 @@ public enum Snapshot: Hashable, Sendable {
     case double(Double)
     case string(String)
     /// The elements of an array or other unkeyed collection, such as a set, in their encoded order.
-    case array([Snapshot])
+    case array([CodableTree])
     /// The properties of a struct or class, or the entries of a dictionary, by key.
-    case object([String: Snapshot])
+    case object([String: CodableTree])
 }
 
-extension Snapshot {
-    /// The snapshot of a value.
+extension CodableTree {
+    /// The tree of a value.
     public init(encoding value: some Encodable) throws {
-        self.init(try SnapshotEncoder().encode(value))
+        self.init(try TreeEncoder().encode(value))
     }
 
-    /// The value this snapshot holds, decoded as `type`.
+    /// The value this tree holds, decoded as `type`.
     public func decode<T: Decodable>(as type: T.Type = T.self) throws -> T {
-        try SnapshotDecoder().decode(type, from: MergeTree(self))
+        try TreeDecoder().decode(type, from: MergeTree(self))
     }
 
     public var isNull: Bool { self == .null }
@@ -68,30 +68,30 @@ extension Snapshot {
         return value
     }
 
-    public var array: [Snapshot]? {
+    public var array: [CodableTree]? {
         guard case .array(let value) = self else { return nil }
         return value
     }
 
-    public var object: [String: Snapshot]? {
+    public var object: [String: CodableTree]? {
         guard case .object(let value) = self else { return nil }
         return value
     }
 
     /// The property or entry for `key`, if this is an object that has it.
-    public subscript(key: String) -> Snapshot? {
+    public subscript(key: String) -> CodableTree? {
         object?[key]
     }
 
     /// The element at `index`, if this is an array that long.
-    public subscript(index: Int) -> Snapshot? {
+    public subscript(index: Int) -> CodableTree? {
         guard let array, array.indices.contains(index) else { return nil }
         return array[index]
     }
 }
 
-extension Snapshot: CustomStringConvertible {
-    /// The snapshot as JSON, with keys sorted.
+extension CodableTree: CustomStringConvertible {
+    /// The tree as JSON, with keys sorted.
     public var description: String {
         switch self {
         case .null: "null"
@@ -107,7 +107,7 @@ extension Snapshot: CustomStringConvertible {
     }
 }
 
-extension Snapshot: ExpressibleByNilLiteral, ExpressibleByBooleanLiteral, ExpressibleByIntegerLiteral, ExpressibleByFloatLiteral,
+extension CodableTree: ExpressibleByNilLiteral, ExpressibleByBooleanLiteral, ExpressibleByIntegerLiteral, ExpressibleByFloatLiteral,
     ExpressibleByStringLiteral, ExpressibleByArrayLiteral, ExpressibleByDictionaryLiteral
 {
     public init(nilLiteral: ()) { self = .null }
@@ -115,35 +115,35 @@ extension Snapshot: ExpressibleByNilLiteral, ExpressibleByBooleanLiteral, Expres
     public init(integerLiteral value: Int64) { self = .int(value) }
     public init(floatLiteral value: Double) { self = .double(value) }
     public init(stringLiteral value: String) { self = .string(value) }
-    public init(arrayLiteral elements: Snapshot...) { self = .array(elements) }
+    public init(arrayLiteral elements: CodableTree...) { self = .array(elements) }
 
-    public init(dictionaryLiteral elements: (String, Snapshot)...) {
+    public init(dictionaryLiteral elements: (String, CodableTree)...) {
         self = .object(Dictionary(elements, uniquingKeysWith: { _, last in last }))
     }
 }
 
-/// Snapshots merge by their shape: objects key by key, arrays element by element, and anything else by
+/// CodableTrees merge by their shape: objects key by key, arrays element by element, and anything else by
 /// keeping the side that changed.
-extension Snapshot: Mergeable {
-    public func merging(_ theirs: Snapshot, base: Snapshot) throws(MergeConflict<Snapshot>) -> Snapshot {
+extension CodableTree: Mergeable {
+    public func merging(_ theirs: CodableTree, base: CodableTree) throws(MergeConflict<CodableTree>) -> CodableTree {
         do {
-            return Snapshot(try MergeTree(self).merging(MergeTree(theirs), base: MergeTree(base)))
+            return CodableTree(try MergeTree(self).merging(MergeTree(theirs), base: MergeTree(base)))
         } catch {
-            throw MergeConflict(base: error.base.map(Snapshot.init), ours: Snapshot(error.ours), theirs: Snapshot(error.theirs))
+            throw MergeConflict(base: error.base.map(CodableTree.init), ours: CodableTree(error.ours), theirs: CodableTree(error.theirs))
         }
     }
 
-    public func merging(_ theirs: Snapshot) throws(MergeConflict<Snapshot>) -> Snapshot {
+    public func merging(_ theirs: CodableTree) throws(MergeConflict<CodableTree>) -> CodableTree {
         do {
-            return Snapshot(try MergeTree(self).merging(MergeTree(theirs)))
+            return CodableTree(try MergeTree(self).merging(MergeTree(theirs)))
         } catch {
-            throw MergeConflict(ours: Snapshot(error.ours), theirs: Snapshot(error.theirs))
+            throw MergeConflict(ours: CodableTree(error.ours), theirs: CodableTree(error.theirs))
         }
     }
 }
 
-extension Snapshot {
-    /// The tree's data, without its rules.
+extension CodableTree {
+    /// The merge tree's data, without its rules.
     init(_ tree: MergeTree) {
         self = switch tree {
         case .null: .null
@@ -152,17 +152,17 @@ extension Snapshot {
         case .uint(let value): .uint(value)
         case .double(let value): .double(value)
         case .string(let value): .string(value)
-        case .array(let values): .array(values.map(Snapshot.init))
-        case .object(let object): .object(object.mapValues(Snapshot.init))
-        case .merged(let data, _): Snapshot(data)
+        case .array(let values): .array(values.map(CodableTree.init))
+        case .object(let object): .object(object.mapValues(CodableTree.init))
+        case .merged(let data, _): CodableTree(data)
         }
     }
 }
 
 extension MergeTree {
-    /// A tree of the snapshot's data, with no rules.
-    init(_ snapshot: Snapshot) {
-        self = switch snapshot {
+    /// A merge tree of this tree's data, with no rules.
+    init(_ tree: CodableTree) {
+        self = switch tree {
         case .null: .null
         case .bool(let value): .bool(value)
         case .int(let value): .int(value)

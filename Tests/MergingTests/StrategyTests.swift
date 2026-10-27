@@ -111,7 +111,7 @@ struct Game: Codable, Equatable, Mergeable {
 }
 
 @Suite struct TypedMergeTests {
-    @Test func aSnapshotStrategyMergesPlainValues() throws {
+    @Test func aTreeStrategyMergesPlainValues() throws {
         #expect(try MaxMerge().typed(as: Int.self).merge(base: 1, ours: 5, theirs: 3) == 5)
         #expect(try WordMerge().typed(as: String.self).merge(base: "a b c", ours: "x b c", theirs: "a b z") == "x b z")
         #expect(throws: MergeConflict<Int>.self) { try AddingMerge().typed(as: Int.self).merge(ours: 1, theirs: 2) }
@@ -121,7 +121,7 @@ struct Game: Codable, Equatable, Mergeable {
         @Merged(MaxMerge().typed(as: Int.self)) var best = 0
     }
 
-    @Test func aTypedSnapshotStrategyWorksInMerged() throws {
+    @Test func aTypedTreeStrategyWorksInMerged() throws {
         var ours = Score()
         ours.best = 7
         var theirs = Score()

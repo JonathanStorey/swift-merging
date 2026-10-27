@@ -1,5 +1,5 @@
-/// A value's `Snapshot`, with the rules its parts merge by: `@Merged` strategies, nested `Mergeable`
-/// types, sets, and dictionaries. `SnapshotEncoder` makes one, and `SnapshotDecoder` reads it back.
+/// A value's `CodableTree`, with the rules its parts merge by: `@Merged` strategies, nested `Mergeable`
+/// types, sets, and dictionaries. `TreeEncoder` makes one, and `TreeDecoder` reads it back.
 enum MergeTree: Equatable, Sendable {
     case null
     case bool(Bool)
@@ -21,7 +21,7 @@ extension MergeTree {
 }
 
 extension MergeTree {
-    /// Text that's the same for equal snapshots and different for different ones, with object keys sorted.
+    /// Text that's the same for equal trees and different for different ones, with object keys sorted.
     var canonical: String {
         switch self {
         case .null: "null"
@@ -40,7 +40,7 @@ extension MergeTree {
 
 /// How part of a tree merges when it isn't by its shape: a `@Merged` strategy, or a nested `Mergeable`
 /// type's own merge. It decodes the versions, merges them, and encodes the result. Rules don't take part in
-/// equality, so two snapshots are equal when their data is.
+/// equality, so two trees are equal when their data is.
 struct MergeRule: Sendable, Equatable {
     /// Merges ours, theirs, and the base when there is one.
     let merge: @Sendable (MergeTree, MergeTree, MergeTree?) throws(MergeConflict<MergeTree>) -> MergeTree
@@ -48,10 +48,10 @@ struct MergeRule: Sendable, Equatable {
     init<Value: Codable & Sendable>(_ type: Value.Type, merge: @escaping @Sendable (Value, Value, Value?) throws -> Value) {
         self.merge = { ours, theirs, base throws(MergeConflict<MergeTree>) in
             do {
-                let decoder = SnapshotDecoder()
+                let decoder = TreeDecoder()
                 let original = try base.map { try decoder.decode(Value.self, from: $0) }
                 let merged = try merge(decoder.decode(Value.self, from: ours), decoder.decode(Value.self, from: theirs), original)
-                return try SnapshotEncoder().encode(merged)
+                return try TreeEncoder().encode(merged)
             } catch {
                 throw MergeConflict(base: base, ours: ours, theirs: theirs)
             }
@@ -65,7 +65,7 @@ struct MergeRule: Sendable, Equatable {
     static func == (lhs: Self, rhs: Self) -> Bool { true }
 }
 
-/// A value that brings its own `MergeRule` to the snapshot it encodes into.
+/// A value that brings its own `MergeRule` to the tree it encodes into.
 protocol MergeRuled {
     var mergeRule: MergeRule { get }
 }
@@ -76,7 +76,7 @@ protocol DefaultMergeRule {
 }
 
 /// A key for an array element, or for a superclass's or other key-less part of a value.
-struct SnapshotKey: CodingKey {
+struct TreeKey: CodingKey {
     let stringValue: String
     let intValue: Int?
 
@@ -90,5 +90,5 @@ struct SnapshotKey: CodingKey {
         self.intValue = intValue
     }
 
-    static let `super` = SnapshotKey(stringValue: "super")
+    static let `super` = TreeKey(stringValue: "super")
 }

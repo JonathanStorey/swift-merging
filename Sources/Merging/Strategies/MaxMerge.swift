@@ -1,14 +1,14 @@
 /// Keeps the larger value: numbers by value, text alphabetically, and dates by time, since they're stored
 /// as numbers. Merges with or without a base. Anything else is a conflict, so for a type of your own,
 /// write a typed strategy that uses its `<`.
-public struct MaxMerge: SnapshotMergeStrategy {
+public struct MaxMerge: TreeMergeStrategy {
     public init() {}
 
-    public func merge(base: Snapshot, ours: Snapshot, theirs: Snapshot) throws(MergeConflict<Snapshot>) -> Snapshot {
+    public func merge(base: CodableTree, ours: CodableTree, theirs: CodableTree) throws(MergeConflict<CodableTree>) -> CodableTree {
         try merge(ours: ours, theirs: theirs)
     }
 
-    public func merge(ours: Snapshot, theirs: Snapshot) throws(MergeConflict<Snapshot>) -> Snapshot {
+    public func merge(ours: CodableTree, theirs: CodableTree) throws(MergeConflict<CodableTree>) -> CodableTree {
         switch (ours, theirs) {
         case let (.string(mine), .string(other)): return mine < other ? theirs : ours
         case let (.int(mine), .int(other)): return mine < other ? theirs : ours
