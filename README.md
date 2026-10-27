@@ -106,15 +106,16 @@ struct Higher<Value: Comparable & Sendable>: MergeStrategy {
 @Merged(Higher()) var level = Level(number: 1)      // uses Level's own <
 ```
 
-A generic typed strategy gets dot syntax from a generic static function, which needs parentheses
-because a static property can't be generic. `NumericSumMerge` is the built-in example:
+A generic typed strategy gets bare dot syntax the way Foundation's `.number` format does: one
+shorthand per concrete type, so the compiler picks the one that matches the property. `NumericSumMerge`
+is the built-in example:
 
 ```swift
-extension MergeStrategy {
-    public static func numericSum<Value>() -> Self where Self == NumericSumMerge<Value> { NumericSumMerge() }
-}
+extension MergeStrategy where Self == NumericSumMerge<Int> { public static var numericSum: Self { Self() } }
+extension MergeStrategy where Self == NumericSumMerge<Double> { public static var numericSum: Self { Self() } }
 
-@Merged(.numericSum()) var distance = 0.0
+@Merged(.numericSum) var distance = 0.0
+@Merged(NumericSumMerge()) var price = Money.zero      // a type without a shorthand
 ```
 
 It implements the three-way merge, and the two-way merge too if it needs no ancestor. It's made with

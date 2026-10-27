@@ -3,7 +3,7 @@
 /// conflict.
 ///
 /// ```swift
-/// @Merged(.numericSum()) var wins = 0
+/// @Merged(.numericSum) var wins = 0
 /// ```
 public struct NumericSumMerge<Value: AdditiveArithmetic & Sendable>: MergeStrategy {
     public init() {}
@@ -25,7 +25,17 @@ private func checkedSum<Whole: FixedWidthInteger>(_ ours: Whole, _ theirs: Any, 
     return overflowed || underflowed ? nil : sum
 }
 
-extension MergeStrategy {
-    /// A counter on any number type: both sides' increments count. Needs a base.
-    public static func numericSum<Value>() -> Self where Self == NumericSumMerge<Value> { NumericSumMerge() }
-}
+// One shorthand per standard number type, as Foundation does for `.number`, since a static property
+// can't be generic. Another number type writes `NumericSumMerge()`.
+extension MergeStrategy where Self == NumericSumMerge<Int> { public static var numericSum: Self { Self() } }
+extension MergeStrategy where Self == NumericSumMerge<Int8> { public static var numericSum: Self { Self() } }
+extension MergeStrategy where Self == NumericSumMerge<Int16> { public static var numericSum: Self { Self() } }
+extension MergeStrategy where Self == NumericSumMerge<Int32> { public static var numericSum: Self { Self() } }
+extension MergeStrategy where Self == NumericSumMerge<Int64> { public static var numericSum: Self { Self() } }
+extension MergeStrategy where Self == NumericSumMerge<UInt> { public static var numericSum: Self { Self() } }
+extension MergeStrategy where Self == NumericSumMerge<UInt8> { public static var numericSum: Self { Self() } }
+extension MergeStrategy where Self == NumericSumMerge<UInt16> { public static var numericSum: Self { Self() } }
+extension MergeStrategy where Self == NumericSumMerge<UInt32> { public static var numericSum: Self { Self() } }
+extension MergeStrategy where Self == NumericSumMerge<UInt64> { public static var numericSum: Self { Self() } }
+extension MergeStrategy where Self == NumericSumMerge<Double> { public static var numericSum: Self { Self() } }
+extension MergeStrategy where Self == NumericSumMerge<Float> { public static var numericSum: Self { Self() } }

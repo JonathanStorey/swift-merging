@@ -2,8 +2,8 @@ import Testing
 @testable import Merging
 
 struct Tally: Codable, Equatable, Mergeable {
-    @Merged(NumericSumMerge()) var visits = 0
-    @Merged(.numericSum()) var distance = 0.0
+    @Merged(.numericSum) var visits = 0
+    @Merged(.numericSum) var distance = 0.0
     @Merged(NumericSumMerge()) var bytes: UInt8 = 0
 }
 
