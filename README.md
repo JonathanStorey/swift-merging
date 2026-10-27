@@ -28,7 +28,8 @@ unless the type knows how to merge without one.
 
 There are three ways to conform, from least to most code:
 
-1. **A `Codable` type conforms with no code.** It merges through a tree of its encoded form, without
+1. **A `Codable` type conforms with no code.** It merges node by node with `CodableNodeMerge`, a
+   structured merge through a tree of its encoded form, without
    going through JSON text. A property only one side changed keeps that side. Where both changed it, a
    `Mergeable` property merges by its type's own merge, an object or dictionary key by key, an array
    element by element (both sides' insertions kept, ours first), a set by keeping what either side added
@@ -78,6 +79,7 @@ struct Game: Codable, Mergeable {
 | `.byMembership` | `SetAlgebraMembershipMerge` | any `SetAlgebra`, such as `Set` or an `OptionSet` | yes |
 | `.union` | `SetAlgebraUnionMerge` | any `SetAlgebra` | no |
 | `.byKey` | `DictionaryKeyedMerge` | any `Codable` dictionary | no |
+| `.byNode` | `CodableNodeMerge` | any `Codable`, overriding a type's own merge | no |
 
 Each is named for the type it suits, then its shorthand, then `Merge`. A strategy decides only when both
 sides changed a property, even to the same value, so two increments of a counter both count. Sets merge

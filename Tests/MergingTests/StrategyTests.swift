@@ -144,3 +144,29 @@ extension Merged where Strategy == LargerTree {
         #expect(merged.worst == 7)
     }
 }
+
+@Suite struct CodableNodeMergeTests {
+    /// Codable, but not Mergeable.
+    struct Place: Codable, Equatable {
+        var street = "Elm"
+        var city = "Oslo"
+    }
+
+    struct Trip: Codable, Mergeable {
+        @Merged(.byNode) var booking = Booking(note: "a", confirmed: false)
+    }
+
+    @Test func mergesAnyCodableValue() throws {
+        let merged = try CodableNodeMerge<Place>().merge(base: Place(), ours: Place(street: "Oak"), theirs: Place(city: "Bergen"))
+        #expect(merged == Place(street: "Oak", city: "Bergen"))
+    }
+
+    @Test func byNodeOverridesATypesOwnMerge() throws {
+        var ours = Trip()
+        ours.booking.note = "b"
+        var theirs = Trip()
+        theirs.booking.confirmed = true
+        let merged = try ours.merging(theirs, base: Trip())
+        #expect(merged.booking == Booking(note: "b", confirmed: true))
+    }
+}
