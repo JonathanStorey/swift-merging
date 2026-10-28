@@ -7,8 +7,10 @@
 | [`.byKey`](#bykey) | `DictionaryKeyedMerge` | any `Codable` dictionary | key by key | yes |
 | [`.byMembership`](#bymembership) | `SetAlgebraMembershipMerge` | `Set`, any `OptionSet` | additions and removals from both | yes |
 | [`.byWord`](#byword) | `StringWordMerge` | `String` | word by word | yes |
+| [`.keep(.ours)`, `.keep(.theirs)`](#keep) | `KeepOursMerge`, `KeepTheirsMerge` | anything | the named side | no |
 | [`.maximum`](#maximum) | `ComparableMaximumMerge` | any `Comparable` | the larger | no |
 | [`.sum`](#sum) | `NumericSumMerge` | any `Numeric` | both changes added | yes |
+| [`.total(favoring:)`](#total) | `CodableTotalMerge` | any `Codable` | node by node, clashes to one side | no |
 | [`.trueWins`](#truewins) | `BoolTrueWinsMerge` | `Bool` | `true` if either is | no |
 | [`.union`](#union) | `SetAlgebraUnionMerge` | `Set`, any `OptionSet` | additions and removals from both | no |
 
@@ -163,6 +165,26 @@ joins them back. Edits to different words combine. Edits to the same word confli
 - **Called directly**, it takes any `StringProtocol`, such as `Substring`. Only `String` is `Codable`, so
   it's the only type a property can use it on.
 
+## .keep
+
+`KeepOursMerge` and `KeepTheirsMerge` always keep one side when both sides changed the value. A value only
+one side changed still keeps that change.
+
+```swift
+@Merged(.keep(.ours)) var draft = ""              // only this device finishes it
+@Merged(.keep(.theirs)) var cachedTotal = 0       // the other side recomputed it
+```
+
+| Base | Ours | Theirs | `.keep(.ours)` | `.keep(.theirs)` |
+| --- | --- | --- | --- | --- |
+| a | b | c | b | c |
+| a | a | c | c | c |
+| none | b | c | b | c |
+
+- **Good for:** derived or cached values, and values one side owns.
+- **Needs a base:** No. The answer is the same with or without one.
+- **Conflicts:** never.
+
 ## .maximum
 
 `ComparableMaximumMerge` keeps the larger value, by the type's own `<`.
@@ -208,6 +230,34 @@ joins them back. Edits to different words combine. Edits to the same word confli
 - **Conflicts:** without a base, and when a whole number would overflow, such as two `+1`s to
   `Int.max - 1`.
 - **Watch for:** a value set outright rather than incremented. Setting 3 to 10 on both sides gives 17.
+
+## .total
+
+`CodableTotalMerge` merges node by node like `.byNode`, but never fails. Every change that doesn't clash
+still applies, from both sides, and a value both sides changed differently takes the favored side, as
+`git merge -X theirs` does.
+
+```swift
+@Merged(.total(favoring: .theirs)) var place = Place()   // never a conflict
+```
+
+| Base | Ours | Theirs | `favoring: .ours` | `favoring: .theirs` |
+| --- | --- | --- | --- | --- |
+| {Elm, Oslo} | {Oak, Oslo} | {Elm, Bergen} | {Oak, Bergen} | {Oak, Bergen} |
+| {Elm, Oslo} | {Oak, Bergen} | {Elm, Trondheim} | {Oak, Bergen} | {Oak, Trondheim} |
+| none | {Oak, Oslo} | {Elm, Oslo} | {Oak, Oslo} | {Elm, Oslo} |
+
+- **Good for:** a sync engine's default merge, which must always produce a record.
+- **Needs a base:** No. Without one, every difference takes the favored side.
+- **Conflicts:** never. Its `merge` doesn't throw. A result that doesn't decode keeps that whole side.
+- **Called directly**, the side is a type, so a sync engine that knows which side is newer picks one for
+  each merge:
+
+```swift
+let merged = oursIsNewer
+    ? CodableTotalMerge<Note, OursSide>().merge(base: base, ours: mine, theirs: yours)
+    : CodableTotalMerge<Note, TheirsSide>().merge(base: base, ours: mine, theirs: yours)
+```
 
 ## .trueWins
 
