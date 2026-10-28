@@ -1,16 +1,19 @@
 # Strategies
 
-| Strategy | Type | Works with | With a base | Without a base |
+| Strategy | Type | Works with | Merges | Needs a base |
 | --- | --- | --- | --- | --- |
-| [`.byNode`](#bynode) | `CodableNodeMerge` | any `Codable` | node by node | equal parts only |
-| [`.byElement`](#byelement) | `RangeReplaceableCollectionElementMerge` | arrays, `String` | element by element | same length, element by element |
-| [`.byKey`](#bykey) | `DictionaryKeyedMerge` | any `Codable` dictionary | key by key | same keys, value by value |
-| [`.byMembership`](#bymembership) | `SetAlgebraMembershipMerge` | `Set`, any `OptionSet` | additions and removals from both | equal sets only |
-| [`.byWord`](#byword) | `StringWordMerge` | `String` | word by word | equal text only |
-| [`.maximum`](#maximum) | `ComparableMaximumMerge` | any `Comparable` | the larger | the larger |
-| [`.sum`](#sum) | `NumericSumMerge` | any `Numeric` | both changes added | equal values only |
-| [`.trueWins`](#truewins) | `BoolTrueWinsMerge` | `Bool` | `true` if either is | `true` if either is |
-| [`.union`](#union) | `SetAlgebraUnionMerge` | `Set`, any `OptionSet` | additions and removals from both | everything from both |
+| [`.byNode`](#bynode) | `CodableNodeMerge` | any `Codable` | node by node | yes |
+| [`.byElement`](#byelement) | `RangeReplaceableCollectionElementMerge` | arrays, `String` | element by element | yes |
+| [`.byKey`](#bykey) | `DictionaryKeyedMerge` | any `Codable` dictionary | key by key | yes |
+| [`.byMembership`](#bymembership) | `SetAlgebraMembershipMerge` | `Set`, any `OptionSet` | additions and removals from both | yes |
+| [`.byWord`](#byword) | `StringWordMerge` | `String` | word by word | yes |
+| [`.maximum`](#maximum) | `ComparableMaximumMerge` | any `Comparable` | the larger | no |
+| [`.sum`](#sum) | `NumericSumMerge` | any `Numeric` | both changes added | yes |
+| [`.trueWins`](#truewins) | `BoolTrueWinsMerge` | `Bool` | `true` if either is | no |
+| [`.union`](#union) | `SetAlgebraUnionMerge` | `Set`, any `OptionSet` | additions and removals from both | no |
+
+A strategy that **needs a base** only merges in a three-way merge. Without a base, only equal values merge,
+and any difference is a conflict. A strategy that doesn't need one merges any two versions.
 
 ## .byNode
 
@@ -47,7 +50,7 @@ Merging an `Address` with a `street` and a `city`:
 | none | {Oak, Oslo} | {Elm, Oslo} | conflict |
 
 - **Good for:** any `Codable` value, including types from other libraries that can't be made `Mergeable`.
-- **Without a base:** objects with the same keys merge key by key, and arrays of the same length element by
+- **Needs a base:** Yes. Without one, objects with the same keys merge key by key, and arrays of the same length element by
   element. Only equal values merge, along with values whose strategy works without a base.
 - **Conflicts:** wherever both sides changed a plain value differently, or when the merged result doesn't
   decode, such as one that breaks a type's own validation.
@@ -75,7 +78,7 @@ ours first. On a `String`, it merges character by character.
 
 - **Good for:** ordered lists where position matters and duplicates are allowed, such as steps, playlists
   and layers.
-- **Without a base:** on a property, lists of the same length merge element by element, so only equal
+- **Needs a base:** Yes. Without one, on a property, lists of the same length merge element by element, so only equal
   elements, or elements with a strategy of their own, merge. Called directly, only equal lists merge. An
   inserted or removed element changes the length and is a conflict.
 - **An element both sides changed:** on a property, it merges by the element's own merge, so two people
@@ -107,7 +110,7 @@ inside them.
 | none | [a: 1] | [a: 1, b: 2] | conflict |
 
 - **Good for:** settings by name, scores by player, any lookup table.
-- **Without a base:** dictionaries with the same keys merge value by value. Different keys conflict, since
+- **Needs a base:** Yes. Without one, dictionaries with the same keys merge value by value. Different keys conflict, since
   there's no telling an added key from a removed one.
 - **Conflicts:** when one side removed a key the other changed, when both changed a value that can't
   merge, or without a base when the keys differ.
@@ -132,7 +135,7 @@ added it, and removed if either side removed it.
 | none | {a, b} | {a, c} | conflict |
 
 - **Good for:** tags, selected options, permissions, followers.
-- **Without a base:** only equal sets merge, since there's no telling an addition from a removal. Use
+- **Needs a base:** Yes. Without one, only equal sets merge, since there's no telling an addition from a removal. Use
   `.union` to keep both sides instead.
 - **Conflicts:** only without a base, when the sets differ.
 - Every `Set` merges this way by default. The shorthand is what lets an `OptionSet` merge by membership.
@@ -153,7 +156,7 @@ joins them back. Edits to different words combine. Edits to the same word confli
 | none | the quick brown fox | the quick brown fox jumped | conflict |
 
 - **Good for:** notes, descriptions, titles, any prose two people might edit.
-- **Without a base:** equal text merges. Different text is a conflict, since there's no telling which
+- **Needs a base:** Yes. Without one, equal text merges. Different text is a conflict, since there's no telling which
   side's words are new.
 - **Words:** a word is a run of letters, digits and apostrophes, together with the spaces and punctuation
   after it, so joining the words gives back the exact text. Every platform splits text the same way.
@@ -176,7 +179,8 @@ joins them back. Edits to different words combine. Edits to the same word confli
 | none | 30 | 50 | 50 |
 
 - **Good for:** high scores, furthest progress, latest dates, version numbers.
-- **Without a base:** the same answer, since the larger value doesn't depend on history.
+- **Needs a base:** No. It gives the same answer without one, since the larger value doesn't depend on
+  history.
 - **Never conflicts.**
 - **Watch for:** a value that should be able to go down, such as a score after a reset. A decrease on one
   side loses to an increase on the other.
@@ -199,7 +203,7 @@ joins them back. Edits to different words combine. Edits to the same word confli
 | none | 4 | 5 | conflict |
 
 - **Good for:** counters, tallies, balances changed by deltas, likes, visits.
-- **Without a base:** equal values merge. Different values are a conflict, since there's no telling how
+- **Needs a base:** Yes. Without one, equal values merge. Different values are a conflict, since there's no telling how
   much each side added.
 - **Conflicts:** without a base, and when a whole number would overflow, such as two `+1`s to
   `Int.max - 1`.
@@ -220,7 +224,7 @@ joins them back. Edits to different words combine. Edits to the same word confli
 | none | false | true | true |
 
 - **Good for:** flags anyone can raise and nobody lowers, such as read, flagged, accepted and archived.
-- **Without a base:** the same answer.
+- **Needs a base:** No. It gives the same answer without one.
 - **Never conflicts.**
 - **Watch for:** a flag that can be cleared. If one side clears it while the other changed it too, `true`
   wins. A clear that only one side made still sticks, since the strategy isn't called.
@@ -241,7 +245,7 @@ side has, so no addition is ever lost.
 
 - **Good for:** sets that should survive a first sync whole, such as recipients, collected items and seen
   IDs.
-- **Without a base:** keeps everything from both sides.
+- **Needs a base:** No. Without one, it keeps everything from both sides.
 - **Never conflicts.**
 - **Watch for:** removals without a base. They're undone, since the other side's copy brings the element
   back.
