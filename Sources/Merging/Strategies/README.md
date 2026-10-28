@@ -3,7 +3,7 @@
 | Strategy | Type | Works with | Merges | Needs a base |
 | --- | --- | --- | --- | --- |
 | [`.byNode`](#bynode) | `CodableNodeMerge` | any `Codable` | node by node | yes |
-| [`.byNode(favoring:)`](#bynode) | `CodableNodeMerge` | any `Codable` | node by node, clashes to one side | no |
+| [`.byNode(favoring:)`](#bynode) | `CodableNodeFavoringMerge` | any `Codable` | node by node, clashes to one side | no |
 | [`.byElement`](#byelement) | `RangeReplaceableCollectionElementMerge` | arrays, `String` | element by element | yes |
 | [`.byKey`](#bykey) | `DictionaryKeyedMerge` | any `Codable` dictionary | key by key | yes |
 | [`.byMembership`](#bymembership) | `SetAlgebraMembershipMerge` | `Set`, any `OptionSet` | additions and removals from both | yes |
@@ -59,15 +59,16 @@ Merging an `Address` with a `street` and a `city`:
 - **On a property:** it overrides that type's own `merging(with:from:)`. A plain `Codable` property already
   merges by node, so the shorthand is only needed to override.
 - It encodes and decodes on every merge, which fits syncing better than tight loops.
-- **Favoring a side:** called directly, `CodableNodeMerge(favoring: .ours)` or `(favoring: .theirs)` never
-  throws. Every change that doesn't clash still applies, from both sides, and only a value both sides
-  changed differently takes the favored side, as `git merge -X theirs` does. A sync engine that knows which
-  side is newer can pass it in. A result that doesn't decode keeps that whole side.
-  On a property, `@Merged(.byNode(favoring: .theirs))` does the same with a fixed side, so the property
-  never conflicts.
+- **Favoring a side:** `.byNode(favoring: .ours)` or `.byNode(favoring: .theirs)`, whose type is
+  `CodableNodeFavoringMerge`, never throws. Every change that doesn't clash still applies, from both sides,
+  and only a value both sides changed differently takes the favored side, as `git merge -X theirs` does. A
+  result that doesn't decode keeps that whole side. A sync engine that knows which side is newer picks the
+  type for each merge:
 
 ```swift
-try CodableNodeMerge<Note>(favoring: oursIsNewer ? .ours : .theirs).merge(base: base, ours: mine, theirs: yours)
+let merged = oursIsNewer
+    ? CodableNodeFavoringMerge<Note, OursSide>().merge(base: base, ours: mine, theirs: yours)
+    : CodableNodeFavoringMerge<Note, TheirsSide>().merge(base: base, ours: mine, theirs: yours)
 ```
 
 ## .byElement

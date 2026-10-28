@@ -1,4 +1,4 @@
-/// The side `CodableNodeMerge(favoring:)` keeps where both sides changed a value and nothing merged it.
+/// A side of a merge, which `.keep` and `.byNode(favoring:)` name with `OursSide` and `TheirsSide`.
 public enum MergeSide: Sendable {
     case ours
     case theirs
