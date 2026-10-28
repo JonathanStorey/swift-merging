@@ -30,18 +30,26 @@ public struct KeepTheirsMerge<Value: Sendable>: MergeStrategy {
     public func merge(ours: Value, theirs: Value) -> Value { theirs }
 }
 
-/// The `.ours` in `.keep(.ours)`. The side is a type so `@Merged` rebuilds it when a value decodes.
-public struct KeepOurs: Sendable {
-    public static var ours: KeepOurs { KeepOurs() }
+/// A side as a type, `.ours` or `.theirs`, so `@Merged` rebuilds a strategy that names one when a value
+/// decodes.
+public protocol SideMarker: Sendable {
+    static var side: MergeSide { get }
 }
 
-/// The `.theirs` in `.keep(.theirs)`.
-public struct KeepTheirs: Sendable {
-    public static var theirs: KeepTheirs { KeepTheirs() }
+/// The `.ours` in `.keep(.ours)` and `.byNode(favoring: .ours)`.
+public struct OursSide: SideMarker {
+    public static var side: MergeSide { .ours }
+    public static var ours: OursSide { OursSide() }
 }
 
-/// The shortcut for `KeepOursMerge`, as `.keep(.ours)`.
-public struct KeepOursShortcut: MergeStrategy, MergeShortcut {
+/// The `.theirs` in `.keep(.theirs)` and `.byNode(favoring: .theirs)`.
+public struct TheirsSide: SideMarker {
+    public static var side: MergeSide { .theirs }
+    public static var theirs: TheirsSide { TheirsSide() }
+}
+
+/// The shortcut for `KeepOursMerge` and `KeepTheirsMerge`, as `.keep(.ours)` and `.keep(.theirs)`.
+public struct KeepShortcut<Side: SideMarker>: MergeStrategy, MergeShortcut {
     public typealias Value = Never
 
     public init() {}
@@ -49,41 +57,22 @@ public struct KeepOursShortcut: MergeStrategy, MergeShortcut {
     public func merge(base: Never, ours: Never, theirs: Never) -> Never {}
 
     static func rule<Value: Codable & Sendable>(for type: Value.Type) -> MergeRule {
-        MergeRule(type) { ours, _, _ in ours }
+        MergeRule(type) { ours, theirs, _ in Side.side == .ours ? ours : theirs }
     }
 }
 
-/// The shortcut for `KeepTheirsMerge`, as `.keep(.theirs)`.
-public struct KeepTheirsShortcut: MergeStrategy, MergeShortcut {
-    public typealias Value = Never
-
-    public init() {}
-
-    public func merge(base: Never, ours: Never, theirs: Never) -> Never {}
-
-    static func rule<Value: Codable & Sendable>(for type: Value.Type) -> MergeRule {
-        MergeRule(type) { _, theirs, _ in theirs }
-    }
-}
-
-extension MergeStrategy where Self == KeepOursShortcut {
+extension MergeStrategy where Self == KeepShortcut<OursSide> {
     /// Keeps ours when both sides changed the value: a draft only this device should finish.
-    public static func keep(_ side: KeepOurs) -> KeepOursShortcut { KeepOursShortcut() }
+    public static func keep(_ side: OursSide) -> Self { Self() }
 }
 
-extension MergeStrategy where Self == KeepTheirsShortcut {
+extension MergeStrategy where Self == KeepShortcut<TheirsSide> {
     /// Keeps theirs when both sides changed the value: a cached or derived value the other side recomputed.
-    public static func keep(_ side: KeepTheirs) -> KeepTheirsShortcut { KeepTheirsShortcut() }
+    public static func keep(_ side: TheirsSide) -> Self { Self() }
 }
 
-extension Merged where Strategy == KeepOursShortcut {
-    public init(wrappedValue: Value, _ strategy: KeepOursShortcut) {
-        self.init(wrappedValue: wrappedValue, shortcut: strategy)
-    }
-}
-
-extension Merged where Strategy == KeepTheirsShortcut {
-    public init(wrappedValue: Value, _ strategy: KeepTheirsShortcut) {
+extension Merged {
+    public init<Side>(wrappedValue: Value, _ strategy: KeepShortcut<Side>) where Strategy == KeepShortcut<Side> {
         self.init(wrappedValue: wrappedValue, shortcut: strategy)
     }
 }

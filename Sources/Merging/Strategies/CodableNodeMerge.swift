@@ -79,3 +79,37 @@ extension Merged where Strategy == ByNodeShortcut {
         self.init(wrappedValue: wrappedValue, shortcut: strategy)
     }
 }
+
+/// The shortcut for `CodableNodeMerge(favoring:)`, as `.byNode(favoring: .ours)` or `.byNode(favoring: .theirs)`.
+/// It never throws: what doesn't clash merges node by node, and a clash takes the favored side.
+public struct ByNodeFavoringShortcut<Side: SideMarker>: MergeStrategy, MergeShortcut {
+    public typealias Value = Never
+
+    public init() {}
+
+    public func merge(base: Never, ours: Never, theirs: Never) -> Never {}
+
+    static func rule<Value: Codable & Sendable>(for type: Value.Type) -> MergeRule {
+        MergeRule(type) { ours, theirs, base in
+            let strategy = CodableNodeMerge<Value>(favoring: Side.side)
+            guard let base else { return try strategy.merge(ours: ours, theirs: theirs) }
+            return try strategy.merge(base: base, ours: ours, theirs: theirs)
+        }
+    }
+}
+
+extension MergeStrategy where Self == ByNodeFavoringShortcut<OursSide> {
+    /// Merges node by node, and where both sides changed a value differently, keeps ours. Never a conflict.
+    public static func byNode(favoring side: OursSide) -> Self { Self() }
+}
+
+extension MergeStrategy where Self == ByNodeFavoringShortcut<TheirsSide> {
+    /// Merges node by node, and where both sides changed a value differently, keeps theirs. Never a conflict.
+    public static func byNode(favoring side: TheirsSide) -> Self { Self() }
+}
+
+extension Merged {
+    public init<Side>(wrappedValue: Value, _ strategy: ByNodeFavoringShortcut<Side>) where Strategy == ByNodeFavoringShortcut<Side> {
+        self.init(wrappedValue: wrappedValue, shortcut: strategy)
+    }
+}

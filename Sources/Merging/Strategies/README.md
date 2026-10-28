@@ -3,6 +3,7 @@
 | Strategy | Type | Works with | Merges | Needs a base |
 | --- | --- | --- | --- | --- |
 | [`.byNode`](#bynode) | `CodableNodeMerge` | any `Codable` | node by node | yes |
+| [`.byNode(favoring:)`](#bynode) | `CodableNodeMerge` | any `Codable` | node by node, clashes to one side | no |
 | [`.byElement`](#byelement) | `RangeReplaceableCollectionElementMerge` | arrays, `String` | element by element | yes |
 | [`.byKey`](#bykey) | `DictionaryKeyedMerge` | any `Codable` dictionary | key by key | yes |
 | [`.byMembership`](#bymembership) | `SetAlgebraMembershipMerge` | `Set`, any `OptionSet` | additions and removals from both | yes |
@@ -62,6 +63,8 @@ Merging an `Address` with a `street` and a `city`:
   throws. Every change that doesn't clash still applies, from both sides, and only a value both sides
   changed differently takes the favored side, as `git merge -X theirs` does. A sync engine that knows which
   side is newer can pass it in. A result that doesn't decode keeps that whole side.
+  On a property, `@Merged(.byNode(favoring: .theirs))` does the same with a fixed side, so the property
+  never conflicts.
 
 ```swift
 try CodableNodeMerge<Note>(favoring: oursIsNewer ? .ours : .theirs).merge(base: base, ours: mine, theirs: yours)

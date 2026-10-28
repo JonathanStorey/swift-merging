@@ -281,3 +281,27 @@ extension Merged where Strategy == LargerTree {
         }
     }
 }
+
+@Suite struct ByNodeFavoringTests {
+    struct Place: Codable, Equatable {
+        var street = "Elm"
+        var city = "Oslo"
+    }
+
+    struct Trip: Codable, Equatable, Mergeable {
+        @Merged(.byNode(favoring: .theirs)) var place = Place()
+        @Merged(.byNode(favoring: .ours)) var stop = Place()
+    }
+
+    @Test func clashesTakeTheFavoredSideAndTheRestMerges() throws {
+        var ours = Trip()
+        ours.place = Place(street: "Oak", city: "Bergen")
+        ours.stop = Place(street: "Oak", city: "Bergen")
+        var theirs = Trip()
+        theirs.place.city = "Trondheim"
+        theirs.stop.city = "Trondheim"
+        let merged = try ours.merging(with: theirs, from: Trip())
+        #expect(merged.place == Place(street: "Oak", city: "Trondheim"))
+        #expect(merged.stop == Place(street: "Oak", city: "Bergen"))
+    }
+}
