@@ -82,7 +82,8 @@ struct Game: Codable, Mergeable {
 | `.byElement` | `RangeReplaceableCollectionElementMerge` | arrays element by element, `String` by character | yes |
 | `.byNode` | `CodableNodeMerge` | any `Codable`, overriding a type's own merge | no |
 
-Each is named for the type it suits, then its shorthand, then `Merge`. A strategy decides only when both
+[Strategies/README.md](Sources/Merging/Strategies/README.md) covers each one in detail, including how it
+behaves without a base. Each is named for the type it suits, then its shorthand, then `Merge`. A strategy decides only when both
 sides changed a property, even to the same value, so two increments of a counter both count. Sets merge
 `.byMembership` and dictionaries `.byKey` without naming a strategy. A mismatch such as
 `@Merged(.byWord) var count = 0` doesn't compile.

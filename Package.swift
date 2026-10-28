@@ -10,7 +10,7 @@ let package = Package(
         .library(name: "Merging", targets: ["Merging"]),
     ],
     targets: [
-        .target(name: "Merging"),
+        .target(name: "Merging", exclude: ["Strategies/README.md"]),
         .testTarget(name: "MergingTests", dependencies: ["Merging"]),
     ]
 )
