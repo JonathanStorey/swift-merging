@@ -26,8 +26,18 @@ public protocol MergeStrategy<Value>: Sendable {
 }
 
 extension MergeStrategy {
+    /// Without a base, a strategy can't tell what either side changed, so this is a conflict.
     public func merge(ours: Value, theirs: Value) throws(MergeConflict<Value>) -> Value {
         throw MergeConflict(ours: ours, theirs: theirs)
+    }
+}
+
+extension MergeStrategy where Value: Equatable {
+    /// Without a base, equal values merge, as they do inside a whole value's merge, and anything else is a
+    /// conflict.
+    public func merge(ours: Value, theirs: Value) throws(MergeConflict<Value>) -> Value {
+        guard ours == theirs else { throw MergeConflict(ours: ours, theirs: theirs) }
+        return ours
     }
 }
 

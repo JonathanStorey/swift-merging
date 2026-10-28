@@ -6,9 +6,9 @@
 | [`.byElement`](#byelement) | `RangeReplaceableCollectionElementMerge` | arrays, `String` | element by element | same length, element by element |
 | [`.byKey`](#bykey) | `DictionaryKeyedMerge` | any `Codable` dictionary | key by key | same keys, value by value |
 | [`.byMembership`](#bymembership) | `SetAlgebraMembershipMerge` | `Set`, any `OptionSet` | additions and removals from both | equal sets only |
-| [`.byWord`](#byword) | `StringWordMerge` | `String` | word by word | conflict |
+| [`.byWord`](#byword) | `StringWordMerge` | `String` | word by word | equal text only |
 | [`.maximum`](#maximum) | `ComparableMaximumMerge` | any `Comparable` | the larger | the larger |
-| [`.sum`](#sum) | `NumericSumMerge` | any `Numeric` | both changes added | conflict |
+| [`.sum`](#sum) | `NumericSumMerge` | any `Numeric` | both changes added | equal values only |
 | [`.trueWins`](#truewins) | `BoolTrueWinsMerge` | `Bool` | `true` if either is | `true` if either is |
 | [`.union`](#union) | `SetAlgebraUnionMerge` | `Set`, any `OptionSet` | additions and removals from both | everything from both |
 
@@ -154,10 +154,12 @@ joins them back. Edits to different words combine. Edits to the same word confli
 | --- | --- | --- | --- |
 | the quick brown fox | the slow brown fox | the quick brown cat | the slow brown cat |
 | the quick brown fox | the slow brown fox | the fast brown fox | conflict |
+| none | the slow brown fox | the slow brown fox | the slow brown fox |
 | none | the slow brown fox | the quick brown cat | conflict |
 
 - **Good for:** notes, descriptions, titles, any prose two people might edit.
-- **Without a base:** conflict, since there's no telling which side's words are new.
+- **Without a base:** equal text merges. Different text is a conflict, since there's no telling which
+  side's words are new.
 - **Words:** a word is a run of letters, digits and apostrophes, together with the spaces and punctuation
   after it, so joining the words gives back the exact text. Every platform splits text the same way.
 - **Called directly**, it takes any `StringProtocol`, such as `Substring`. Only `String` is `Codable`, so
@@ -199,10 +201,12 @@ joins them back. Edits to different words combine. Edits to the same word confli
 | 3 | 5 | 1 | 3 (+2 and −2) |
 | 10 | 12 | 8 | 10 |
 | Int.max − 1 | Int.max | Int.max | conflict (overflow) |
+| none | 5 | 5 | 5 |
 | none | 4 | 5 | conflict |
 
 - **Good for:** counters, tallies, balances changed by deltas, likes, visits.
-- **Without a base:** conflict, since there's no telling how much each side added.
+- **Without a base:** equal values merge. Different values are a conflict, since there's no telling how
+  much each side added.
 - **Conflicts:** without a base, and when a whole number would overflow, such as two `+1`s to
   `Int.max - 1`.
 - **Watch for:** a value set outright rather than incremented. Setting 3 to 10 on both sides gives 17.

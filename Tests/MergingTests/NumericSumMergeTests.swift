@@ -29,9 +29,11 @@ struct Tally: Codable, Equatable, Mergeable {
         }
     }
 
-    @Test func needsABase() {
+    @Test func needsABaseUnlessEqual() throws {
         #expect(throws: MergeConflict<Int>.self) {
             try NumericSumMerge<Int>().merge(ours: 1, theirs: 2)
         }
+        #expect(try NumericSumMerge<Int>().merge(ours: 5, theirs: 5) == 5)
+        #expect(try StringWordMerge<String>().merge(ours: "the fox", theirs: "the fox") == "the fox")
     }
 }

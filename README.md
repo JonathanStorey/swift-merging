@@ -99,7 +99,7 @@ So without a base, each strategy does one of four things:
 | **The same answer** | `.maximum`, `.trueWins` | the result doesn't depend on history |
 | **A looser answer** | `.union` | keeps everything from both sides, so removals are undone |
 | **Merges only what matches** | `.byNode`, `.byElement`, `.byKey`, `.byMembership` | equal parts merge, and any difference conflicts |
-| **Always a conflict** | `.sum`, `.byWord` | the answer needs the base |
+| **Merges only equal values** | `.sum`, `.byWord` | any difference needs the base |
 
 "Merges only what matches" works structurally. Objects with the same keys merge key by key, and lists of
 the same length element by element, so a strategy deeper inside still gets its say.
