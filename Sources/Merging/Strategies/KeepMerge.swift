@@ -1,4 +1,4 @@
-/// A side of a merge, which `.keep` and `.byNode(favoring:)` name with `OursSide` and `TheirsSide`.
+/// A side of a merge, which `.keep` and `.total(favoring:)` name with `OursSide` and `TheirsSide`.
 public enum MergeSide: Sendable {
     case ours
     case theirs
@@ -36,13 +36,13 @@ public protocol SideMarker: Sendable {
     static var side: MergeSide { get }
 }
 
-/// The `.ours` in `.keep(.ours)` and `.byNode(favoring: .ours)`.
+/// The `.ours` in `.keep(.ours)` and `.total(favoring: .ours)`.
 public struct OursSide: SideMarker {
     public static var side: MergeSide { .ours }
     public static var ours: OursSide { OursSide() }
 }
 
-/// The `.theirs` in `.keep(.theirs)` and `.byNode(favoring: .theirs)`.
+/// The `.theirs` in `.keep(.theirs)` and `.total(favoring: .theirs)`.
 public struct TheirsSide: SideMarker {
     public static var side: MergeSide { .theirs }
     public static var theirs: TheirsSide { TheirsSide() }

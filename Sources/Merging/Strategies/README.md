@@ -3,7 +3,6 @@
 | Strategy | Type | Works with | Merges | Needs a base |
 | --- | --- | --- | --- | --- |
 | [`.byNode`](#bynode) | `CodableNodeMerge` | any `Codable` | node by node | yes |
-| [`.byNode(favoring:)`](#bynode) | `CodableNodeFavoringMerge` | any `Codable` | node by node, clashes to one side | no |
 | [`.byElement`](#byelement) | `RangeReplaceableCollectionElementMerge` | arrays, `String` | element by element | yes |
 | [`.byKey`](#bykey) | `DictionaryKeyedMerge` | any `Codable` dictionary | key by key | yes |
 | [`.byMembership`](#bymembership) | `SetAlgebraMembershipMerge` | `Set`, any `OptionSet` | additions and removals from both | yes |
@@ -11,6 +10,7 @@
 | [`.keep(.ours)`, `.keep(.theirs)`](#keep) | `KeepOursMerge`, `KeepTheirsMerge` | anything | the named side | no |
 | [`.maximum`](#maximum) | `ComparableMaximumMerge` | any `Comparable` | the larger | no |
 | [`.sum`](#sum) | `NumericSumMerge` | any `Numeric` | both changes added | yes |
+| [`.total(favoring:)`](#total) | `CodableTotalMerge` | any `Codable` | node by node, clashes to one side | no |
 | [`.trueWins`](#truewins) | `BoolTrueWinsMerge` | `Bool` | `true` if either is | no |
 | [`.union`](#union) | `SetAlgebraUnionMerge` | `Set`, any `OptionSet` | additions and removals from both | no |
 
@@ -59,17 +59,6 @@ Merging an `Address` with a `street` and a `city`:
 - **On a property:** it overrides that type's own `merging(with:from:)`. A plain `Codable` property already
   merges by node, so the shorthand is only needed to override.
 - It encodes and decodes on every merge, which fits syncing better than tight loops.
-- **Favoring a side:** `.byNode(favoring: .ours)` or `.byNode(favoring: .theirs)`, whose type is
-  `CodableNodeFavoringMerge`, never throws. Every change that doesn't clash still applies, from both sides,
-  and only a value both sides changed differently takes the favored side, as `git merge -X theirs` does. A
-  result that doesn't decode keeps that whole side. A sync engine that knows which side is newer picks the
-  type for each merge:
-
-```swift
-let merged = oursIsNewer
-    ? CodableNodeFavoringMerge<Note, OursSide>().merge(base: base, ours: mine, theirs: yours)
-    : CodableNodeFavoringMerge<Note, TheirsSide>().merge(base: base, ours: mine, theirs: yours)
-```
 
 ## .byElement
 
@@ -241,6 +230,34 @@ one side changed still keeps that change.
 - **Conflicts:** without a base, and when a whole number would overflow, such as two `+1`s to
   `Int.max - 1`.
 - **Watch for:** a value set outright rather than incremented. Setting 3 to 10 on both sides gives 17.
+
+## .total
+
+`CodableTotalMerge` merges node by node like `.byNode`, but never fails. Every change that doesn't clash
+still applies, from both sides, and a value both sides changed differently takes the favored side, as
+`git merge -X theirs` does.
+
+```swift
+@Merged(.total(favoring: .theirs)) var place = Place()   // never a conflict
+```
+
+| Base | Ours | Theirs | `favoring: .ours` | `favoring: .theirs` |
+| --- | --- | --- | --- | --- |
+| {Elm, Oslo} | {Oak, Oslo} | {Elm, Bergen} | {Oak, Bergen} | {Oak, Bergen} |
+| {Elm, Oslo} | {Oak, Bergen} | {Elm, Trondheim} | {Oak, Bergen} | {Oak, Trondheim} |
+| none | {Oak, Oslo} | {Elm, Oslo} | {Oak, Oslo} | {Elm, Oslo} |
+
+- **Good for:** a sync engine's default merge, which must always produce a record.
+- **Needs a base:** No. Without one, every difference takes the favored side.
+- **Conflicts:** never. Its `merge` doesn't throw. A result that doesn't decode keeps that whole side.
+- **Called directly**, the side is a type, so a sync engine that knows which side is newer picks one for
+  each merge:
+
+```swift
+let merged = oursIsNewer
+    ? CodableTotalMerge<Note, OursSide>().merge(base: base, ours: mine, theirs: yours)
+    : CodableTotalMerge<Note, TheirsSide>().merge(base: base, ours: mine, theirs: yours)
+```
 
 ## .trueWins
 

@@ -247,9 +247,9 @@ extension Merged where Strategy == LargerTree {
         theirs.name = "Anne"
         theirs.place.city = "Trondheim"
         theirs.tags.insert("work")
-        let keepTheirs = CodableNodeFavoringMerge<Contact, TheirsSide>().merge(base: Contact(), ours: ours, theirs: theirs)
+        let keepTheirs = CodableTotalMerge<Contact, TheirsSide>().merge(base: Contact(), ours: ours, theirs: theirs)
         #expect(keepTheirs == Contact(name: "Anne", place: Place(street: "Oak", city: "Trondheim"), tags: ["family", "work"]))
-        let keepOurs = CodableNodeFavoringMerge<Contact, OursSide>().merge(base: Contact(), ours: ours, theirs: theirs)
+        let keepOurs = CodableTotalMerge<Contact, OursSide>().merge(base: Contact(), ours: ours, theirs: theirs)
         #expect(keepOurs == Contact(name: "Ann B.", place: Place(street: "Oak", city: "Bergen"), tags: ["family", "work"]))
     }
 
@@ -258,8 +258,8 @@ extension Merged where Strategy == LargerTree {
         ours.notes["a"] = nil
         var theirs = Contact()
         theirs.notes["a"] = "2"
-        #expect(CodableNodeFavoringMerge<Contact, OursSide>().merge(base: Contact(), ours: ours, theirs: theirs).notes == [:])
-        #expect(CodableNodeFavoringMerge<Contact, TheirsSide>().merge(base: Contact(), ours: ours, theirs: theirs).notes == ["a": "2"])
+        #expect(CodableTotalMerge<Contact, OursSide>().merge(base: Contact(), ours: ours, theirs: theirs).notes == [:])
+        #expect(CodableTotalMerge<Contact, TheirsSide>().merge(base: Contact(), ours: ours, theirs: theirs).notes == ["a": "2"])
     }
 
     @Test func withoutABaseEachDifferenceKeepsTheSide() throws {
@@ -267,7 +267,7 @@ extension Merged where Strategy == LargerTree {
         ours.name = "Ann B."
         var theirs = Contact()
         theirs.place.city = "Bergen"
-        let merged = CodableNodeFavoringMerge<Contact, TheirsSide>().merge(ours: ours, theirs: theirs)
+        let merged = CodableTotalMerge<Contact, TheirsSide>().merge(ours: ours, theirs: theirs)
         #expect(merged == Contact(name: "Ann", place: Place(street: "Elm", city: "Bergen")))
     }
 
@@ -282,15 +282,15 @@ extension Merged where Strategy == LargerTree {
     }
 }
 
-@Suite struct ByNodeFavoringTests {
+@Suite struct TotalTests {
     struct Place: Codable, Equatable {
         var street = "Elm"
         var city = "Oslo"
     }
 
     struct Trip: Codable, Equatable, Mergeable {
-        @Merged(.byNode(favoring: .theirs)) var place = Place()
-        @Merged(.byNode(favoring: .ours)) var stop = Place()
+        @Merged(.total(favoring: .theirs)) var place = Place()
+        @Merged(.total(favoring: .ours)) var stop = Place()
     }
 
     @Test func clashesTakeTheFavoredSideAndTheRestMerges() throws {

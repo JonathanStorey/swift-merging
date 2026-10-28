@@ -97,7 +97,7 @@ So without a base, each strategy does one of four things:
 
 | Behavior | Strategies | Why |
 | --- | --- | --- |
-| **The same answer** | `.maximum`, `.trueWins`, `.keep`, `.byNode(favoring:)` | the result doesn't depend on history |
+| **The same answer** | `.maximum`, `.trueWins`, `.keep`, `.total(favoring:)` | the result doesn't depend on history |
 | **A looser answer** | `.union` | keeps everything from both sides, so removals are undone |
 | **Merges only what matches** | `.byNode`, `.byElement`, `.byKey`, `.byMembership` | equal parts merge, and any difference conflicts |
 | **Merges only equal values** | `.sum`, `.byWord` | any difference needs the base |

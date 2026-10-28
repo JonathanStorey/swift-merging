@@ -4,10 +4,10 @@
 ///
 /// ```swift
 /// let merged = oursIsNewer
-///     ? CodableNodeFavoringMerge<Note, OursSide>().merge(base: base, ours: mine, theirs: yours)
-///     : CodableNodeFavoringMerge<Note, TheirsSide>().merge(base: base, ours: mine, theirs: yours)
+///     ? CodableTotalMerge<Note, OursSide>().merge(base: base, ours: mine, theirs: yours)
+///     : CodableTotalMerge<Note, TheirsSide>().merge(base: base, ours: mine, theirs: yours)
 /// ```
-public struct CodableNodeFavoringMerge<Value: Codable & Sendable, Side: SideMarker>: MergeStrategy {
+public struct CodableTotalMerge<Value: Codable & Sendable, Side: SideMarker>: MergeStrategy {
     public init() {}
 
     public func merge(base: Value, ours: Value, theirs: Value) -> Value {
@@ -31,8 +31,8 @@ public struct CodableNodeFavoringMerge<Value: Codable & Sendable, Side: SideMark
     }
 }
 
-/// The shortcut for `CodableNodeFavoringMerge`, as `.byNode(favoring: .ours)` or `.byNode(favoring: .theirs)`.
-public struct ByNodeFavoringShortcut<Side: SideMarker>: MergeStrategy, MergeShortcut {
+/// The shortcut for `CodableTotalMerge`, as `.total(favoring: .ours)` or `.total(favoring: .theirs)`.
+public struct TotalShortcut<Side: SideMarker>: MergeStrategy, MergeShortcut {
     public typealias Value = Never
 
     public init() {}
@@ -41,24 +41,24 @@ public struct ByNodeFavoringShortcut<Side: SideMarker>: MergeStrategy, MergeShor
 
     static func rule<Value: Codable & Sendable>(for type: Value.Type) -> MergeRule {
         MergeRule(type) { ours, theirs, base in
-            let strategy = CodableNodeFavoringMerge<Value, Side>()
+            let strategy = CodableTotalMerge<Value, Side>()
             guard let base else { return strategy.merge(ours: ours, theirs: theirs) }
             return strategy.merge(base: base, ours: ours, theirs: theirs)
         }
     }
 }
-extension MergeStrategy where Self == ByNodeFavoringShortcut<OursSide> {
+extension MergeStrategy where Self == TotalShortcut<OursSide> {
     /// Merges node by node, and where both sides changed a value differently, keeps ours. Never a conflict.
-    public static func byNode(favoring side: OursSide) -> Self { Self() }
+    public static func total(favoring side: OursSide) -> Self { Self() }
 }
 
-extension MergeStrategy where Self == ByNodeFavoringShortcut<TheirsSide> {
+extension MergeStrategy where Self == TotalShortcut<TheirsSide> {
     /// Merges node by node, and where both sides changed a value differently, keeps theirs. Never a conflict.
-    public static func byNode(favoring side: TheirsSide) -> Self { Self() }
+    public static func total(favoring side: TheirsSide) -> Self { Self() }
 }
 
 extension Merged {
-    public init<Side>(wrappedValue: Value, _ strategy: ByNodeFavoringShortcut<Side>) where Strategy == ByNodeFavoringShortcut<Side> {
+    public init<Side>(wrappedValue: Value, _ strategy: TotalShortcut<Side>) where Strategy == TotalShortcut<Side> {
         self.init(wrappedValue: wrappedValue, shortcut: strategy)
     }
 }
