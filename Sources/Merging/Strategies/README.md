@@ -38,6 +38,15 @@ struct Settings: Codable, Mergeable {           // merges by node, with no code
 try CodableNodeMerge<Address>().merge(base: original, ours: mine, theirs: yours)
 ```
 
+Merging an `Address` with a `street` and a `city`:
+
+| Base | Ours | Theirs | Result |
+| --- | --- | --- | --- |
+| {Elm, Oslo} | {Oak, Oslo} | {Elm, Bergen} | {Oak, Bergen} |
+| {Elm, Oslo} | {Oak, Oslo} | {Pine, Oslo} | conflict |
+| none | {Elm, Oslo} | {Elm, Oslo} | {Elm, Oslo} |
+| none | {Oak, Oslo} | {Elm, Oslo} | conflict |
+
 - **Good for:** any `Codable` value, including types from other libraries that can't be made `Mergeable`.
 - **Without a base:** objects with the same keys merge key by key, and arrays of the same length element by
   element. Only equal values merge, along with values whose strategy works without a base.
@@ -62,6 +71,9 @@ ours first. On a `String`, it merges character by character.
 | --- | --- | --- | --- |
 | [boil, stir, serve] | [boil, salt, stir, serve] | [stir, serve, eat] | [salt, stir, serve, eat] |
 | soup | soups | Soup | Soups |
+| [a, b] | [a, x] | [a, y] | conflict |
+| none | [a, b] | [a, b] | [a, b] |
+| none | [a, b] | [a, b, c] | conflict |
 
 - **Good for:** ordered lists where position matters and duplicates are allowed, such as steps, playlists
   and layers.
@@ -71,8 +83,9 @@ ours first. On a `String`, it merges character by character.
 - **An element both sides changed:** on a property, it merges by the element's own merge, so two people
   editing different fields of the same item both keep their changes. Called directly, elements match by
   `==`, so different replacements of the same element are a conflict.
-- **Conflicts:** only when both sides replaced the same element differently and the replacements can't
-  merge. Different insertions at the same spot are both kept, ours first.
+- **Conflicts:** when both sides replaced the same element differently and the replacements can't merge,
+  or without a base when the lengths differ. Different insertions at the same spot are both kept, ours
+  first.
 - **Watch for:** moves. A move is a removal plus an insertion, so two people moving the same element to
   different places keep both copies.
 - Arrays already merge this way by default, so on an array the shorthand states intent. On a `String` it
@@ -93,12 +106,14 @@ inside them.
 | --- | --- | --- | --- |
 | [a: 1] | [a: 1, b: 2] | [:] | [b: 2] |
 | [a: 1] | [a: 2] | [a: 3] | conflict |
+| none | [a: 1, b: 2] | [a: 1, b: 2] | [a: 1, b: 2] |
+| none | [a: 1] | [a: 1, b: 2] | conflict |
 
 - **Good for:** settings by name, scores by player, any lookup table.
 - **Without a base:** dictionaries with the same keys merge value by value. Different keys conflict, since
   there's no telling an added key from a removed one.
-- **Conflicts:** when one side removed a key the other changed, or when both changed a value that can't
-  merge.
+- **Conflicts:** when one side removed a key the other changed, when both changed a value that can't
+  merge, or without a base when the keys differ.
 - Every `Dictionary` merges this way by default. Struct keys work too: a dictionary whose keys aren't
   `String` or `Int` encodes as a flat list, and this strategy lines the keys back up.
 - **Called directly**, it takes any `Codable` type written as a dictionary literal, such as an ordered
@@ -117,11 +132,13 @@ added it, and removed if either side removed it.
 | Base | Ours | Theirs | Result |
 | --- | --- | --- | --- |
 | {a, b, c} | {a, c, ours} | {a, b, theirs} | {a, ours, theirs} |
+| none | {a, b} | {a, b} | {a, b} |
+| none | {a, b} | {a, c} | conflict |
 
 - **Good for:** tags, selected options, permissions, followers.
 - **Without a base:** only equal sets merge, since there's no telling an addition from a removal. Use
   `.union` to keep both sides instead.
-- **Never conflicts with a base.**
+- **Conflicts:** only without a base, when the sets differ.
 - Every `Set` merges this way by default. The shorthand is what lets an `OptionSet` merge by membership.
 
 ## .byWord
@@ -137,6 +154,7 @@ joins them back. Edits to different words combine. Edits to the same word confli
 | --- | --- | --- | --- |
 | the quick brown fox | the slow brown fox | the quick brown cat | the slow brown cat |
 | the quick brown fox | the slow brown fox | the fast brown fox | conflict |
+| none | the slow brown fox | the quick brown cat | conflict |
 
 - **Good for:** notes, descriptions, titles, any prose two people might edit.
 - **Without a base:** conflict, since there's no telling which side's words are new.
@@ -180,10 +198,13 @@ joins them back. Edits to different words combine. Edits to the same word confli
 | 3 | 4 | 4 | 5 (both added one) |
 | 3 | 5 | 1 | 3 (+2 and −2) |
 | 10 | 12 | 8 | 10 |
+| Int.max − 1 | Int.max | Int.max | conflict (overflow) |
+| none | 4 | 5 | conflict |
 
 - **Good for:** counters, tallies, balances changed by deltas, likes, visits.
 - **Without a base:** conflict, since there's no telling how much each side added.
-- **Conflicts:** when a whole number would overflow, such as two `+1`s to `Int.max - 1`.
+- **Conflicts:** without a base, and when a whole number would overflow, such as two `+1`s to
+  `Int.max - 1`.
 - **Watch for:** a value set outright rather than incremented. Setting 3 to 10 on both sides gives 17.
 
 ## .trueWins
