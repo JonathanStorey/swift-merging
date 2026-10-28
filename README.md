@@ -67,6 +67,7 @@ struct Game: Codable, Mergeable {
     @Merged(.byMembership) var tags: Set<String> = []   // who's in it
     @Merged(.union) var recipients: Set<String> = []    // never loses an addition, even without a base
     @Merged(.byKey) var pins: [Spot: String] = [:]      // key by key, whatever the key
+    @Merged(.keep(.theirs)) var rank = 0                // always the other side's when both changed
 }
 ```
 
@@ -96,7 +97,7 @@ So without a base, each strategy does one of four things:
 
 | Behavior | Strategies | Why |
 | --- | --- | --- |
-| **The same answer** | `.maximum`, `.trueWins` | the result doesn't depend on history |
+| **The same answer** | `.maximum`, `.trueWins`, `.keep` | the result doesn't depend on history |
 | **A looser answer** | `.union` | keeps everything from both sides, so removals are undone |
 | **Merges only what matches** | `.byNode`, `.byElement`, `.byKey`, `.byMembership` | equal parts merge, and any difference conflicts |
 | **Merges only equal values** | `.sum`, `.byWord` | any difference needs the base |

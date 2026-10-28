@@ -10,15 +10,31 @@
 /// ```swift
 /// try CodableNodeMerge<Address>().merge(base: original, ours: mine, theirs: yours)
 /// ```
+///
+/// With `onClash`, it never throws. Each clash keeps that side and the rest still merges, which suits a sync
+/// engine that knows which side is newer:
+///
+/// ```swift
+/// try CodableNodeMerge<Note>(onClash: oursIsNewer ? .ours : .theirs).merge(base: base, ours: mine, theirs: yours)
+/// ```
 public struct CodableNodeMerge<Value: Codable & Sendable>: MergeStrategy {
+    /// The side a clash keeps, or `nil` to throw a conflict. A result that doesn't decode keeps that whole
+    /// side. `@Merged` makes the strategy with `init()`, so this is for calling it directly.
+    public var onClash: MergeSide?
+
     public init() {}
+
+    public init(onClash: MergeSide?) {
+        self.onClash = onClash
+    }
 
     public func merge(base: Value, ours: Value, theirs: Value) throws(MergeConflict<Value>) -> Value {
         do {
             let encoder = TreeEncoder()
-            let merged = try encoder.encode(ours).merging(with: encoder.encode(theirs), from: encoder.encode(base))
+            let merged = try encoder.encode(ours).merging(with: encoder.encode(theirs), from: encoder.encode(base), onClash: onClash)
             return try TreeDecoder().decode(Value.self, from: merged)
         } catch {
+            if let onClash { return onClash == .ours ? ours : theirs }
             throw MergeConflict(base: base, ours: ours, theirs: theirs)
         }
     }
@@ -26,9 +42,10 @@ public struct CodableNodeMerge<Value: Codable & Sendable>: MergeStrategy {
     public func merge(ours: Value, theirs: Value) throws(MergeConflict<Value>) -> Value {
         do {
             let encoder = TreeEncoder()
-            let merged = try encoder.encode(ours).merging(with: encoder.encode(theirs))
+            let merged = try encoder.encode(ours).merging(with: encoder.encode(theirs), onClash: onClash)
             return try TreeDecoder().decode(Value.self, from: merged)
         } catch {
+            if let onClash { return onClash == .ours ? ours : theirs }
             throw MergeConflict(ours: ours, theirs: theirs)
         }
     }

@@ -185,3 +185,99 @@ extension Merged where Strategy == LargerTree {
         #expect(game.wins == 6)
     }
 }
+
+@Suite struct KeepTests {
+    struct Draft: Codable, Equatable, Mergeable {
+        @Merged(.keep(.ours)) var body = "a"
+        @Merged(.keep(.theirs)) var total = 1
+        var title = "t"
+    }
+
+    @Test func keepsTheNamedSideWhenBothChanged() throws {
+        var ours = Draft()
+        ours.body = "ours"
+        ours.total = 2
+        var theirs = Draft()
+        theirs.body = "theirs"
+        theirs.total = 3
+        theirs.title = "theirs"
+        let merged = try ours.merging(with: theirs, from: Draft())
+        #expect(merged.body == "ours")
+        #expect(merged.total == 3)
+        #expect(merged.title == "theirs")
+    }
+
+    @Test func mergesWithoutABase() throws {
+        var ours = Draft()
+        ours.body = "ours"
+        ours.total = 2
+        var theirs = Draft()
+        theirs.body = "theirs"
+        theirs.total = 3
+        let merged = try ours.merging(with: theirs)
+        #expect(merged.body == "ours")
+        #expect(merged.total == 3)
+    }
+
+    @Test func typedStrategiesKeepTheirSide() {
+        #expect(KeepOursMerge<Int>().merge(base: 1, ours: 2, theirs: 3) == 2)
+        #expect(KeepTheirsMerge<Int>().merge(ours: 2, theirs: 3) == 3)
+    }
+}
+
+@Suite struct OnClashTests {
+    struct Place: Codable, Equatable {
+        var street = "Elm"
+        var city = "Oslo"
+    }
+
+    struct Contact: Codable, Equatable {
+        var name = "Ann"
+        var place = Place()
+        var tags: Set<String> = ["family"]
+        var notes: [String: String] = ["a": "1"]
+    }
+
+    @Test func aClashKeepsTheSideAndTheRestStillMerges() throws {
+        var ours = Contact()
+        ours.name = "Ann B."
+        ours.place.street = "Oak"
+        ours.place.city = "Bergen"
+        var theirs = Contact()
+        theirs.name = "Anne"
+        theirs.place.city = "Trondheim"
+        theirs.tags.insert("work")
+        let keepTheirs = try CodableNodeMerge<Contact>(onClash: .theirs).merge(base: Contact(), ours: ours, theirs: theirs)
+        #expect(keepTheirs == Contact(name: "Anne", place: Place(street: "Oak", city: "Trondheim"), tags: ["family", "work"]))
+        let keepOurs = try CodableNodeMerge<Contact>(onClash: .ours).merge(base: Contact(), ours: ours, theirs: theirs)
+        #expect(keepOurs == Contact(name: "Ann B.", place: Place(street: "Oak", city: "Bergen"), tags: ["family", "work"]))
+    }
+
+    @Test func aKeyRemovedWhileTheOtherChangedItKeepsTheSide() throws {
+        var ours = Contact()
+        ours.notes["a"] = nil
+        var theirs = Contact()
+        theirs.notes["a"] = "2"
+        #expect(try CodableNodeMerge<Contact>(onClash: .ours).merge(base: Contact(), ours: ours, theirs: theirs).notes == [:])
+        #expect(try CodableNodeMerge<Contact>(onClash: .theirs).merge(base: Contact(), ours: ours, theirs: theirs).notes == ["a": "2"])
+    }
+
+    @Test func withoutABaseEachDifferenceKeepsTheSide() throws {
+        var ours = Contact()
+        ours.name = "Ann B."
+        var theirs = Contact()
+        theirs.place.city = "Bergen"
+        let merged = try CodableNodeMerge<Contact>(onClash: .theirs).merge(ours: ours, theirs: theirs)
+        #expect(merged == Contact(name: "Ann", place: Place(street: "Elm", city: "Bergen")))
+    }
+
+    @Test func withoutOnClashAClashStillThrows() {
+        var ours = Contact()
+        ours.name = "Ann B."
+        var theirs = Contact()
+        theirs.name = "Anne"
+        #expect(throws: MergeConflict<Contact>.self) {
+            try CodableNodeMerge<Contact>().merge(base: Contact(), ours: ours, theirs: theirs)
+        }
+    }
+}

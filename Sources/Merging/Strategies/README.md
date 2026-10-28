@@ -7,6 +7,7 @@
 | [`.byKey`](#bykey) | `DictionaryKeyedMerge` | any `Codable` dictionary | key by key | yes |
 | [`.byMembership`](#bymembership) | `SetAlgebraMembershipMerge` | `Set`, any `OptionSet` | additions and removals from both | yes |
 | [`.byWord`](#byword) | `StringWordMerge` | `String` | word by word | yes |
+| [`.keep(.ours)`, `.keep(.theirs)`](#keep) | `KeepOursMerge`, `KeepTheirsMerge` | anything | the named side | no |
 | [`.maximum`](#maximum) | `ComparableMaximumMerge` | any `Comparable` | the larger | no |
 | [`.sum`](#sum) | `NumericSumMerge` | any `Numeric` | both changes added | yes |
 | [`.trueWins`](#truewins) | `BoolTrueWinsMerge` | `Bool` | `true` if either is | no |
@@ -57,6 +58,13 @@ Merging an `Address` with a `street` and a `city`:
 - **On a property:** it overrides that type's own `merging(with:from:)`. A plain `Codable` property already
   merges by node, so the shorthand is only needed to override.
 - It encodes and decodes on every merge, which fits syncing better than tight loops.
+- **Settling clashes:** called directly, `CodableNodeMerge(onClash: .ours)` or `(onClash: .theirs)` never
+  throws. Each clash keeps that side and everything else still merges, so a sync engine that knows which
+  side is newer can pass it in. A result that doesn't decode keeps that whole side.
+
+```swift
+try CodableNodeMerge<Note>(onClash: oursIsNewer ? .ours : .theirs).merge(base: base, ours: mine, theirs: yours)
+```
 
 ## .byElement
 
@@ -162,6 +170,26 @@ joins them back. Edits to different words combine. Edits to the same word confli
   after it, so joining the words gives back the exact text. Every platform splits text the same way.
 - **Called directly**, it takes any `StringProtocol`, such as `Substring`. Only `String` is `Codable`, so
   it's the only type a property can use it on.
+
+## .keep
+
+`KeepOursMerge` and `KeepTheirsMerge` always keep one side when both sides changed the value. A value only
+one side changed still keeps that change.
+
+```swift
+@Merged(.keep(.ours)) var draft = ""              // only this device finishes it
+@Merged(.keep(.theirs)) var cachedTotal = 0       // the other side recomputed it
+```
+
+| Base | Ours | Theirs | `.keep(.ours)` | `.keep(.theirs)` |
+| --- | --- | --- | --- | --- |
+| a | b | c | b | c |
+| a | a | c | c | c |
+| none | b | c | b | c |
+
+- **Good for:** derived or cached values, and values one side owns.
+- **Needs a base:** No. The answer is the same with or without one.
+- **Conflicts:** never.
 
 ## .maximum
 
