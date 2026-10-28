@@ -44,7 +44,6 @@ Merging an `Address` with a `street` and a `city`:
 | --- | --- | --- | --- |
 | {Elm, Oslo} | {Oak, Oslo} | {Elm, Bergen} | {Oak, Bergen} |
 | {Elm, Oslo} | {Oak, Oslo} | {Pine, Oslo} | conflict |
-| none | {Elm, Oslo} | {Elm, Oslo} | {Elm, Oslo} |
 | none | {Oak, Oslo} | {Elm, Oslo} | conflict |
 
 - **Good for:** any `Codable` value, including types from other libraries that can't be made `Mergeable`.
@@ -72,7 +71,6 @@ ours first. On a `String`, it merges character by character.
 | [boil, stir, serve] | [boil, salt, stir, serve] | [stir, serve, eat] | [salt, stir, serve, eat] |
 | soup | soups | Soup | Soups |
 | [a, b] | [a, x] | [a, y] | conflict |
-| none | [a, b] | [a, b] | [a, b] |
 | none | [a, b] | [a, b, c] | conflict |
 
 - **Good for:** ordered lists where position matters and duplicates are allowed, such as steps, playlists
@@ -106,7 +104,6 @@ inside them.
 | --- | --- | --- | --- |
 | [a: 1] | [a: 1, b: 2] | [:] | [b: 2] |
 | [a: 1] | [a: 2] | [a: 3] | conflict |
-| none | [a: 1, b: 2] | [a: 1, b: 2] | [a: 1, b: 2] |
 | none | [a: 1] | [a: 1, b: 2] | conflict |
 
 - **Good for:** settings by name, scores by player, any lookup table.
@@ -132,7 +129,6 @@ added it, and removed if either side removed it.
 | Base | Ours | Theirs | Result |
 | --- | --- | --- | --- |
 | {a, b, c} | {a, c, ours} | {a, b, theirs} | {a, ours, theirs} |
-| none | {a, b} | {a, b} | {a, b} |
 | none | {a, b} | {a, c} | conflict |
 
 - **Good for:** tags, selected options, permissions, followers.
@@ -154,8 +150,7 @@ joins them back. Edits to different words combine. Edits to the same word confli
 | --- | --- | --- | --- |
 | the quick brown fox | the slow brown fox | the quick brown cat | the slow brown cat |
 | the quick brown fox | the slow brown fox | the fast brown fox | conflict |
-| none | the slow brown fox | the slow brown fox | the slow brown fox |
-| none | the slow brown fox | the quick brown cat | conflict |
+| none | the quick brown fox | the quick brown fox jumped | conflict |
 
 - **Good for:** notes, descriptions, titles, any prose two people might edit.
 - **Without a base:** equal text merges. Different text is a conflict, since there's no telling which
@@ -201,7 +196,6 @@ joins them back. Edits to different words combine. Edits to the same word confli
 | 3 | 5 | 1 | 3 (+2 and −2) |
 | 10 | 12 | 8 | 10 |
 | Int.max − 1 | Int.max | Int.max | conflict (overflow) |
-| none | 5 | 5 | 5 |
 | none | 4 | 5 | conflict |
 
 - **Good for:** counters, tallies, balances changed by deltas, likes, visits.
