@@ -225,7 +225,7 @@ extension Merged where Strategy == LargerTree {
     }
 }
 
-@Suite struct OnClashTests {
+@Suite struct FavoringTests {
     struct Place: Codable, Equatable {
         var street = "Elm"
         var city = "Oslo"
@@ -247,9 +247,9 @@ extension Merged where Strategy == LargerTree {
         theirs.name = "Anne"
         theirs.place.city = "Trondheim"
         theirs.tags.insert("work")
-        let keepTheirs = try CodableNodeMerge<Contact>(onClash: .theirs).merge(base: Contact(), ours: ours, theirs: theirs)
+        let keepTheirs = try CodableNodeMerge<Contact>(favoring: .theirs).merge(base: Contact(), ours: ours, theirs: theirs)
         #expect(keepTheirs == Contact(name: "Anne", place: Place(street: "Oak", city: "Trondheim"), tags: ["family", "work"]))
-        let keepOurs = try CodableNodeMerge<Contact>(onClash: .ours).merge(base: Contact(), ours: ours, theirs: theirs)
+        let keepOurs = try CodableNodeMerge<Contact>(favoring: .ours).merge(base: Contact(), ours: ours, theirs: theirs)
         #expect(keepOurs == Contact(name: "Ann B.", place: Place(street: "Oak", city: "Bergen"), tags: ["family", "work"]))
     }
 
@@ -258,8 +258,8 @@ extension Merged where Strategy == LargerTree {
         ours.notes["a"] = nil
         var theirs = Contact()
         theirs.notes["a"] = "2"
-        #expect(try CodableNodeMerge<Contact>(onClash: .ours).merge(base: Contact(), ours: ours, theirs: theirs).notes == [:])
-        #expect(try CodableNodeMerge<Contact>(onClash: .theirs).merge(base: Contact(), ours: ours, theirs: theirs).notes == ["a": "2"])
+        #expect(try CodableNodeMerge<Contact>(favoring: .ours).merge(base: Contact(), ours: ours, theirs: theirs).notes == [:])
+        #expect(try CodableNodeMerge<Contact>(favoring: .theirs).merge(base: Contact(), ours: ours, theirs: theirs).notes == ["a": "2"])
     }
 
     @Test func withoutABaseEachDifferenceKeepsTheSide() throws {
@@ -267,11 +267,11 @@ extension Merged where Strategy == LargerTree {
         ours.name = "Ann B."
         var theirs = Contact()
         theirs.place.city = "Bergen"
-        let merged = try CodableNodeMerge<Contact>(onClash: .theirs).merge(ours: ours, theirs: theirs)
+        let merged = try CodableNodeMerge<Contact>(favoring: .theirs).merge(ours: ours, theirs: theirs)
         #expect(merged == Contact(name: "Ann", place: Place(street: "Elm", city: "Bergen")))
     }
 
-    @Test func withoutOnClashAClashStillThrows() {
+    @Test func withoutFavoringAClashStillThrows() {
         var ours = Contact()
         ours.name = "Ann B."
         var theirs = Contact()

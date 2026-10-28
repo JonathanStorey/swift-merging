@@ -58,12 +58,13 @@ Merging an `Address` with a `street` and a `city`:
 - **On a property:** it overrides that type's own `merging(with:from:)`. A plain `Codable` property already
   merges by node, so the shorthand is only needed to override.
 - It encodes and decodes on every merge, which fits syncing better than tight loops.
-- **Settling clashes:** called directly, `CodableNodeMerge(onClash: .ours)` or `(onClash: .theirs)` never
-  throws. Each clash keeps that side and everything else still merges, so a sync engine that knows which
+- **Favoring a side:** called directly, `CodableNodeMerge(favoring: .ours)` or `(favoring: .theirs)` never
+  throws. Every change that doesn't clash still applies, from both sides, and only a value both sides
+  changed differently takes the favored side, as `git merge -X theirs` does. A sync engine that knows which
   side is newer can pass it in. A result that doesn't decode keeps that whole side.
 
 ```swift
-try CodableNodeMerge<Note>(onClash: oursIsNewer ? .ours : .theirs).merge(base: base, ours: mine, theirs: yours)
+try CodableNodeMerge<Note>(favoring: oursIsNewer ? .ours : .theirs).merge(base: base, ours: mine, theirs: yours)
 ```
 
 ## .byElement

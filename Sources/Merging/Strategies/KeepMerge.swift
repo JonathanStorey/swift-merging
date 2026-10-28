@@ -1,4 +1,4 @@
-/// The side `CodableNodeMerge(onClash:)` keeps where both sides changed a value and nothing merged it.
+/// The side `CodableNodeMerge(favoring:)` keeps where both sides changed a value and nothing merged it.
 public enum MergeSide: Sendable {
     case ours
     case theirs
