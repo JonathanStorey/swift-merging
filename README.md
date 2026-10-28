@@ -52,7 +52,7 @@ struct Booking: Codable, Mergeable {
 }
 ```
 
-The tree merge encodes and decodes on every merge, which suits syncing rather than tight loops.
+The tree merge encodes and decodes on every merge, which fits syncing better than tight loops.
 
 ## Strategies
 
@@ -70,23 +70,44 @@ struct Game: Codable, Mergeable {
 }
 ```
 
-| Shorthand | Strategy | Suits | Needs a base |
-| --- | --- | --- | --- |
-| `.maximum` | `ComparableMaximumMerge` | any `Comparable` | no |
-| `.sum` | `NumericSumMerge` | any `Numeric` | yes |
-| `.trueWins` | `BoolTrueWinsMerge` | `Bool` | no |
-| `.byWord` | `StringWordMerge` | `String` (any `StringProtocol` when called directly) | yes |
-| `.byMembership` | `SetAlgebraMembershipMerge` | any `SetAlgebra`, such as `Set` or an `OptionSet` | yes |
-| `.union` | `SetAlgebraUnionMerge` | any `SetAlgebra` | no |
-| `.byKey` | `DictionaryKeyedMerge` | any `Codable` dictionary | no |
-| `.byElement` | `RangeReplaceableCollectionElementMerge` | arrays element by element, `String` by character | yes |
-| `.byNode` | `CodableNodeMerge` | any `Codable`, overriding a type's own merge | no |
+[Strategies/README.md](Sources/Merging/Strategies/README.md) details each strategy, with examples and how
+it behaves without a base. Sets merge `.byMembership` and dictionaries `.byKey` without naming a strategy. A
+mismatch such as `@Merged(.byWord) var count = 0` doesn't compile.
 
-[Strategies/README.md](Sources/Merging/Strategies/README.md) covers each one in detail, including how it
-behaves without a base. Each is named for the type it suits, then its shorthand, then `Merge`. A strategy decides only when both
-sides changed a property, even to the same value, so two increments of a counter both count. Sets merge
-`.byMembership` and dictionaries `.byKey` without naming a strategy. A mismatch such as
-`@Merged(.byWord) var count = 0` doesn't compile.
+### When a strategy runs
+
+A strategy only decides when both sides changed a value. Before it's called, the merge settles the easy
+cases: if theirs equals the base, ours wins, and if ours equals the base, theirs wins. So a strategy always
+sees two real edits, even two equal ones, and two increments of a counter both count.
+
+### Merging without a base
+
+A three-way merge knows what each side started from. A two-way merge only has ours and theirs, which costs
+it three things:
+
+1. **It can't tell who changed what.** Any difference counts as both sides changing it, so every
+   difference goes to the strategy.
+2. **It can't tell an addition from a removal.** If ours has `x` and theirs doesn't, either ours added it
+   or theirs removed it.
+3. **It can't measure a change.** A counter at 5 on one side and 7 on the other could have started
+   anywhere.
+
+So without a base, each strategy does one of four things:
+
+| Behavior | Strategies | Why |
+| --- | --- | --- |
+| **The same answer** | `.maximum`, `.trueWins` | the result doesn't depend on history |
+| **A looser answer** | `.union` | keeps everything from both sides, so removals are undone |
+| **Merges only what matches** | `.byNode`, `.byElement`, `.byKey`, `.byMembership` | equal parts merge, and any difference conflicts |
+| **Always a conflict** | `.sum`, `.byWord` | the answer needs the base |
+
+"Merges only what matches" works structurally. Objects with the same keys merge key by key, and lists of
+the same length element by element, so a strategy deeper inside still gets its say.
+
+A conflict without a base is the honest answer. It hands the caller both versions, and the caller can pick
+one with information the merge doesn't have, such as which device wrote last.
+
+### Merging one property
 
 `$` merges one property by its strategy, as the whole value's merge would:
 
@@ -130,8 +151,8 @@ around this with a non-generic shortcut type, such as `MaximumShortcut`, whose o
 checks the property's type. Without a shortcut, a generic strategy of your own takes a shorthand per
 concrete type, as Foundation's `.number` format does, or is written out: `@Merged(LargestMerge())`.
 
-A `TreeMergeStrategy` works on the property's `CodableTree` instead, so one strategy suits many types. It
-declares the types it suits with one initializer, and `typed(as:)` turns it into a typed strategy:
+A `TreeMergeStrategy` works on the property's `CodableTree` instead, so one strategy works with many types. It
+declares the types it works with with one initializer, and `typed(as:)` turns it into a typed strategy:
 
 ```swift
 extension Merged where Strategy == ShoutMerge {
