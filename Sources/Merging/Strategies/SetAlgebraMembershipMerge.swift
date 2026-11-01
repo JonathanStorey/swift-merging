@@ -8,12 +8,12 @@
 public struct SetAlgebraMembershipMerge<Value: SetAlgebra & Sendable>: MergeStrategy {
     public init() {}
 
-    public func merge(base: Value, ours: Value, theirs: Value) -> Value {
+    public func merge(base: Value, ours: Value, theirs: Value) -> Value? {
         .mergedByMembership(base: base, ours: ours, theirs: theirs)
     }
 
-    public func merge(ours: Value, theirs: Value) throws(MergeConflict<Value>) -> Value {
-        guard ours == theirs else { throw MergeConflict(ours: ours, theirs: theirs) }
+    public func merge(ours: Value, theirs: Value) -> Value? {
+        guard ours == theirs else { return nil }
         return ours
     }
 }
@@ -24,7 +24,7 @@ public struct ByMembershipShortcut: MergeStrategy, MergeShortcut {
 
     public init() {}
 
-    public func merge(base: Never, ours: Never, theirs: Never) -> Never {}
+    public func merge(base: Never, ours: Never, theirs: Never) -> Never? {}
 
     static func rule<Value: Codable & Sendable>(for type: Value.Type) -> MergeRule {
         MergeRule(type) { ours, theirs, base in
@@ -67,19 +67,19 @@ extension SetAlgebra {
 /// matching elements by their canonical text.
 extension Set: DefaultMergeRule {
     static var defaultMergeRule: MergeRule {
-        MergeRule { ours, theirs, base throws(MergeConflict<MergeTree>) in try MergeTree.mergeSets(ours, theirs, base: base) }
+        MergeRule { ours, theirs, base throws(MergeClash) in try MergeTree.mergeSets(ours, theirs, base: base) }
     }
 }
 
 extension MergeTree {
-    static func mergeSets(_ ours: MergeTree, _ theirs: MergeTree, base: MergeTree?) throws(MergeConflict<MergeTree>) -> MergeTree {
-        guard case .array(let mine) = ours, case .array(let other) = theirs else { throw MergeConflict(base: base, ours: ours, theirs: theirs) }
+    static func mergeSets(_ ours: MergeTree, _ theirs: MergeTree, base: MergeTree?) throws(MergeClash) -> MergeTree {
+        guard case .array(let mine) = ours, case .array(let other) = theirs else { throw MergeClash() }
         let (mineKeys, otherKeys) = (Set(mine.map(\.canonical)), Set(other.map(\.canonical)))
         guard let base else {
-            guard mineKeys == otherKeys else { throw MergeConflict(ours: ours, theirs: theirs) }
+            guard mineKeys == otherKeys else { throw MergeClash() }
             return ours
         }
-        guard case .array(let original) = base else { throw MergeConflict(base: base, ours: ours, theirs: theirs) }
+        guard case .array(let original) = base else { throw MergeClash() }
         let baseKeys = Set(original.map(\.canonical))
         let kept = mine.filter { otherKeys.contains($0.canonical) || !baseKeys.contains($0.canonical) }
         let added = other.filter { !mineKeys.contains($0.canonical) && !baseKeys.contains($0.canonical) }

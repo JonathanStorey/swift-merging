@@ -13,18 +13,26 @@ struct Note: Codable, Mergeable {
 }
 
 var draft = mine
-try draft.merge(with: yours, from: original)             // or draft.merging(with: yours, from: original)
+draft.merge(with: yours, from: original)                 // or draft.merging(with: yours, from: original)
 ```
 
 ## Mergeable
 
 `Mergeable` has one requirement, `merging(with:from:)`, which merges `theirs` into a value, which is ours,
-knowing their common ancestor. A merge throws a `MergeConflict` holding the versions when it can't merge
-them. The mutating `merge(with:from:)` leaves the value unchanged on a conflict, and the static
+knowing their common ancestor. It returns `nil` when the versions can't be merged, a conflict, and the
+caller decides what happens next with the versions it already holds. The mutating `merge(with:from:)`
+returns whether it merged and leaves the value unchanged on a conflict, and the static
 `merge(base:ours:theirs:)` is there too.
 
-Without an ancestor there's no telling which side changed, so the two-way `merging(with:)` throws a conflict
-unless the type knows how to merge without one.
+```swift
+guard let merged = mine.merging(with: yours, from: original) else {
+    // a conflict: keep one side, ask the user, or use what the sync layer knows
+}
+```
+
+Without an ancestor there's no telling which side changed, so the two-way `merging(with:)` returns `nil`
+unless the type knows how to merge without one. With `@Merged`, `$property.merging(with:from:)` shows
+which property conflicts.
 
 There are three ways to conform, from least to most code:
 
@@ -113,8 +121,8 @@ one with information the merge doesn't have, such as which device wrote last.
 `$` merges one property by its strategy, as the whole value's merge would:
 
 ```swift
-try game.$wins.merge(with: theirs.wins, from: base.wins)
-let best = try game.$highScore.merging(with: 20, from: 10)
+game.$wins.merge(with: theirs.wins, from: base.wins)
+let best = game.$highScore.merging(with: 20, from: 10)     // Int?
 ```
 
 Every standard strategy is typed, so it also merges plain values:
@@ -126,15 +134,14 @@ ComparableMaximumMerge<Int>().merge(base: 1, ours: 5, theirs: 3)    // 5
 ### Writing a strategy
 
 A strategy of your own works on the property's own type. It implements the three-way merge, and the
-two-way merge too if it needs no ancestor. It's made with `init()` when a value decodes, so it holds no
-settings of its own. A non-generic strategy whose merge doesn't throw names its value with
-`typealias Value`.
+two-way merge too if it needs no ancestor, and returns `nil` for versions it can't merge. It's made with
+`init()` when a value decodes, so it holds no settings of its own.
 
 ```swift
 struct LongerMerge: MergeStrategy {
     typealias Value = String
 
-    func merge(base: String, ours: String, theirs: String) -> String {
+    func merge(base: String, ours: String, theirs: String) -> String? {
         ours.count >= theirs.count ? ours : theirs
     }
 }
@@ -162,12 +169,8 @@ extension Merged where Strategy == ShoutMerge {
     }
 }
 
-try ShoutMerge().typed(as: String.self).merge(base: "a", ours: "b", theirs: "c")
+ShoutMerge().typed(as: String.self).merge(base: "a", ours: "b", theirs: "c")
 ```
-
-On Swift 6.1, a generic strategy that throws a conflict of a type built from its generic parameters, such
-as `MergeConflict<Set<Element>>`, crashes the compiler, so the standard strategies are generic over the
-whole type. Swift 6.2 fixes it.
 
 ## CodableTree
 
@@ -194,7 +197,7 @@ tree.difference(from: original)                     // ["~ age: 30 → 31", "+ t
 
 ## Requirements
 
-Swift 6.1 (Xcode 16.3) or later, for typed throws and Swift Testing. iOS 17, macOS 14, tvOS 17, watchOS 10 and
+Swift 6.1 (Xcode 16.3) or later. iOS 17, macOS 14, tvOS 17, watchOS 10 and
 visionOS 1, or Linux.
 
 ```swift

@@ -7,9 +7,9 @@
 public struct ComparableMaximumMerge<Value: Comparable & Sendable>: MergeStrategy {
     public init() {}
 
-    public func merge(base: Value, ours: Value, theirs: Value) -> Value { merge(ours: ours, theirs: theirs) }
+    public func merge(base: Value, ours: Value, theirs: Value) -> Value? { merge(ours: ours, theirs: theirs) }
 
-    public func merge(ours: Value, theirs: Value) -> Value { ours < theirs ? theirs : ours }
+    public func merge(ours: Value, theirs: Value) -> Value? { ours < theirs ? theirs : ours }
 }
 
 /// The shortcut for `ComparableMaximumMerge`, as `.maximum`.
@@ -18,7 +18,7 @@ public struct MaximumShortcut: MergeStrategy, MergeShortcut {
 
     public init() {}
 
-    public func merge(base: Never, ours: Never, theirs: Never) -> Never {}
+    public func merge(base: Never, ours: Never, theirs: Never) -> Never? {}
 
     static func rule<Value: Codable & Sendable>(for type: Value.Type) -> MergeRule {
         MergeRule(type) { ours, theirs, base in

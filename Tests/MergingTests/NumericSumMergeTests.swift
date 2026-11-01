@@ -16,24 +16,18 @@ struct Tally: Codable, Equatable, Mergeable {
         var theirs = base
         theirs.visits += 1
         theirs.bytes -= 4
-        let merged = try ours.merging(with: theirs, from: base)
+        let merged = try #require(ours.merging(with: theirs, from: base))
         #expect(merged == Tally(visits: 5, distance: 3.5, bytes: 6))
     }
 
     @Test func overflowIsAConflict() {
-        #expect(throws: MergeConflict<UInt8>.self) {
-            try NumericSumMerge<UInt8>().merge(base: 100, ours: 200, theirs: 200)
-        }
-        #expect(throws: MergeConflict<Int>.self) {
-            try NumericSumMerge<Int>().merge(base: 0, ours: .max, theirs: 1)
-        }
+        #expect(NumericSumMerge<UInt8>().merge(base: 100, ours: 200, theirs: 200) == nil)
+        #expect(NumericSumMerge<Int>().merge(base: 0, ours: .max, theirs: 1) == nil)
     }
 
-    @Test func needsABaseUnlessEqual() throws {
-        #expect(throws: MergeConflict<Int>.self) {
-            try NumericSumMerge<Int>().merge(ours: 1, theirs: 2)
-        }
-        #expect(try NumericSumMerge<Int>().merge(ours: 5, theirs: 5) == 5)
-        #expect(try StringWordMerge<String>().merge(ours: "the fox", theirs: "the fox") == "the fox")
+    @Test func needsABaseUnlessEqual() {
+        #expect(NumericSumMerge<Int>().merge(ours: 1, theirs: 2) == nil)
+        #expect(NumericSumMerge<Int>().merge(ours: 5, theirs: 5) == 5)
+        #expect(StringWordMerge<String>().merge(ours: "the fox", theirs: "the fox") == "the fox")
     }
 }

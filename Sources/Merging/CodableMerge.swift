@@ -7,11 +7,11 @@
 /// }
 /// ```
 extension Mergeable where Self: Codable {
-    public func merging(with theirs: Self, from base: Self) throws(MergeConflict<Self>) -> Self {
-        try CodableNodeMerge().merge(base: base, ours: self, theirs: theirs)
+    public func merging(with theirs: Self, from base: Self) -> Self? {
+        CodableNodeMerge().merge(base: base, ours: self, theirs: theirs)
     }
 
-    public func merging(with theirs: Self) throws(MergeConflict<Self>) -> Self {
-        try CodableNodeMerge().merge(ours: self, theirs: theirs)
+    public func merging(with theirs: Self) -> Self? {
+        CodableNodeMerge().merge(ours: self, theirs: theirs)
     }
 }

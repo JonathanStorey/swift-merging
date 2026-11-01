@@ -12,9 +12,9 @@ public enum MergeSide: Sendable {
 public struct KeepOursMerge<Value: Sendable>: MergeStrategy {
     public init() {}
 
-    public func merge(base: Value, ours: Value, theirs: Value) -> Value { ours }
+    public func merge(base: Value, ours: Value, theirs: Value) -> Value? { ours }
 
-    public func merge(ours: Value, theirs: Value) -> Value { ours }
+    public func merge(ours: Value, theirs: Value) -> Value? { ours }
 }
 
 /// Always keeps theirs when both sides changed the value. Merges with or without a base.
@@ -25,9 +25,9 @@ public struct KeepOursMerge<Value: Sendable>: MergeStrategy {
 public struct KeepTheirsMerge<Value: Sendable>: MergeStrategy {
     public init() {}
 
-    public func merge(base: Value, ours: Value, theirs: Value) -> Value { theirs }
+    public func merge(base: Value, ours: Value, theirs: Value) -> Value? { theirs }
 
-    public func merge(ours: Value, theirs: Value) -> Value { theirs }
+    public func merge(ours: Value, theirs: Value) -> Value? { theirs }
 }
 
 /// A side as a type, `.ours` or `.theirs`, so `@Merged` rebuilds a strategy that names one when a value
@@ -54,7 +54,7 @@ public struct KeepShortcut<Side: SideMarker>: MergeStrategy, MergeShortcut {
 
     public init() {}
 
-    public func merge(base: Never, ours: Never, theirs: Never) -> Never {}
+    public func merge(base: Never, ours: Never, theirs: Never) -> Never? {}
 
     static func rule<Value: Codable & Sendable>(for type: Value.Type) -> MergeRule {
         MergeRule(type) { ours, theirs, _ in Side.side == .ours ? ours : theirs }

@@ -8,9 +8,9 @@ public struct BoolTrueWinsMerge: MergeStrategy {
 
     public init() {}
 
-    public func merge(base: Bool, ours: Bool, theirs: Bool) -> Bool { ours || theirs }
+    public func merge(base: Bool, ours: Bool, theirs: Bool) -> Bool? { ours || theirs }
 
-    public func merge(ours: Bool, theirs: Bool) -> Bool { ours || theirs }
+    public func merge(ours: Bool, theirs: Bool) -> Bool? { ours || theirs }
 }
 
 extension MergeStrategy where Self == BoolTrueWinsMerge {

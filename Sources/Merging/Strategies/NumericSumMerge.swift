@@ -7,8 +7,8 @@
 public struct NumericSumMerge<Value: Numeric & Sendable>: MergeStrategy {
     public init() {}
 
-    public func merge(base: Value, ours: Value, theirs: Value) throws(MergeConflict<Value>) -> Value {
-        guard let sum = summed(base: base, ours: ours, theirs: theirs) else { throw MergeConflict(base: base, ours: ours, theirs: theirs) }
+    public func merge(base: Value, ours: Value, theirs: Value) -> Value? {
+        guard let sum = summed(base: base, ours: ours, theirs: theirs) else { return nil }
         return sum
     }
 }
@@ -32,7 +32,7 @@ public struct SumShortcut: MergeStrategy, MergeShortcut {
 
     public init() {}
 
-    public func merge(base: Never, ours: Never, theirs: Never) -> Never {}
+    public func merge(base: Never, ours: Never, theirs: Never) -> Never? {}
 
     static func rule<Value: Codable & Sendable>(for type: Value.Type) -> MergeRule {
         MergeRule(type) { ours, theirs, base in

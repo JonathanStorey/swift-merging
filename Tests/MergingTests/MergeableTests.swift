@@ -4,15 +4,15 @@ import Testing
 
 /// A typed strategy: keeps the larger value by the type's own `<`, with or without a base.
 struct Larger<Value: Comparable & Sendable>: MergeStrategy {
-    func merge(base: Value, ours: Value, theirs: Value) -> Value { max(ours, theirs) }
-    func merge(ours: Value, theirs: Value) -> Value { max(ours, theirs) }
+    func merge(base: Value, ours: Value, theirs: Value) -> Value? { max(ours, theirs) }
+    func merge(ours: Value, theirs: Value) -> Value? { max(ours, theirs) }
 }
 
 /// Adds both sides' changes, which needs the base.
 struct CounterMerge: MergeStrategy {
     typealias Value = Int
 
-    func merge(base: Int, ours: Int, theirs: Int) -> Int { ours + theirs - base }
+    func merge(base: Int, ours: Int, theirs: Int) -> Int? { ours + theirs - base }
 }
 
 struct Address: Codable, Equatable, Mergeable {
@@ -25,7 +25,7 @@ struct Booking: Codable, Equatable, Mergeable {
     var note = ""
     var confirmed = false
 
-    func merging(with theirs: Booking, from base: Booking) -> Booking {
+    func merging(with theirs: Booking, from base: Booking) -> Booking? {
         confirmed ? self : theirs
     }
 }
@@ -47,7 +47,7 @@ struct Player: Codable, Equatable, Mergeable {
         ours.name = "Ana B"
         var theirs = base
         theirs.address.city = "Bergen"
-        let merged = try ours.merging(with: theirs, from: base)
+        let merged = try #require(ours.merging(with: theirs, from: base))
         #expect(merged.name == "Ana B")
         #expect(merged.address == Address(street: "Elm", city: "Bergen"))
     }
@@ -59,7 +59,7 @@ struct Player: Codable, Equatable, Mergeable {
         var theirs = base
         theirs.highScore = 20
         theirs.wins = 4
-        let merged = try ours.merging(with: theirs, from: base)
+        let merged = try #require(ours.merging(with: theirs, from: base))
         #expect(merged.highScore == 30)
         #expect(merged.wins == 6)
     }
@@ -69,7 +69,7 @@ struct Player: Codable, Equatable, Mergeable {
         ours.booking = Booking(note: "mine")
         var theirs = base
         theirs.booking = Booking(note: "theirs", confirmed: true)
-        #expect(try ours.merging(with: theirs, from: base).booking == Booking(note: "theirs", confirmed: true))
+        #expect(ours.merging(with: theirs, from: base)?.booking == Booking(note: "theirs", confirmed: true))
     }
 
     @Test func aPropertyBothChangedMakesTheValueAConflict() {
@@ -77,26 +77,19 @@ struct Player: Codable, Equatable, Mergeable {
         ours.name = "Ana B"
         var theirs = base
         theirs.name = "Ana C"
-        do {
-            _ = try ours.merging(with: theirs, from: base)
-            Issue.record("Expected a conflict")
-        } catch {
-            #expect(error.base?.name == "Ana")
-            #expect(error.ours.name == "Ana B")
-            #expect(error.theirs.name == "Ana C")
-        }
+        #expect(ours.merging(with: theirs, from: base) == nil)
     }
 
     @Test func twoWayMergesWhatsEqualAndWhatsStrategyAllows() throws {
         var theirs = base
         theirs.highScore = 50
-        #expect(try base.merging(with: theirs).highScore == 50)
+        #expect(base.merging(with: theirs)?.highScore == 50)
         theirs.wins = 9
-        #expect(throws: MergeConflict<Player>.self) { try base.merging(with: theirs) }
+        #expect(base.merging(with: theirs) == nil)
     }
 
-    @Test func aHandWrittenMergeThrowsWithoutABase() {
-        #expect(throws: MergeConflict<Booking>.self) { try Booking().merging(with: Booking(note: "x")) }
+    @Test func aHandWrittenMergeFailsWithoutABase() {
+        #expect(Booking().merging(with: Booking(note: "x")) == nil)
     }
 
     @Test func mutatingAndStaticMergesMatch() throws {
@@ -104,8 +97,9 @@ struct Player: Codable, Equatable, Mergeable {
         ours.name = "Ana B"
         var theirs = base
         theirs.address.city = "Bergen"
-        let merged = try Player.merge(base: base, ours: ours, theirs: theirs)
-        try ours.merge(with: theirs, from: base)
+        let merged = try #require(Player.merge(base: base, ours: ours, theirs: theirs))
+        let didMerge = ours.merge(with: theirs, from: base)
+        #expect(didMerge)
         #expect(ours == merged)
     }
 
@@ -115,7 +109,8 @@ struct Player: Codable, Equatable, Mergeable {
         let before = ours
         var theirs = base
         theirs.name = "Ana C"
-        #expect(throws: MergeConflict<Player>.self) { try ours.merge(with: theirs, from: base) }
+        let merged = ours.merge(with: theirs, from: base)
+        #expect(!merged)
         #expect(ours == before)
     }
 

@@ -13,23 +13,23 @@
 public struct CodableNodeMerge<Value: Codable & Sendable>: MergeStrategy {
     public init() {}
 
-    public func merge(base: Value, ours: Value, theirs: Value) throws(MergeConflict<Value>) -> Value {
+    public func merge(base: Value, ours: Value, theirs: Value) -> Value? {
         do {
             let encoder = TreeEncoder()
             let merged = try encoder.encode(ours).merging(with: encoder.encode(theirs), from: encoder.encode(base))
             return try TreeDecoder().decode(Value.self, from: merged)
         } catch {
-            throw MergeConflict(base: base, ours: ours, theirs: theirs)
+            return nil
         }
     }
 
-    public func merge(ours: Value, theirs: Value) throws(MergeConflict<Value>) -> Value {
+    public func merge(ours: Value, theirs: Value) -> Value? {
         do {
             let encoder = TreeEncoder()
             let merged = try encoder.encode(ours).merging(with: encoder.encode(theirs))
             return try TreeDecoder().decode(Value.self, from: merged)
         } catch {
-            throw MergeConflict(ours: ours, theirs: theirs)
+            return nil
         }
     }
 }
@@ -40,13 +40,13 @@ public struct ByNodeShortcut: MergeStrategy, MergeShortcut {
 
     public init() {}
 
-    public func merge(base: Never, ours: Never, theirs: Never) -> Never {}
+    public func merge(base: Never, ours: Never, theirs: Never) -> Never? {}
 
     static func rule<Value: Codable & Sendable>(for type: Value.Type) -> MergeRule {
         MergeRule(type) { ours, theirs, base in
             let strategy = CodableNodeMerge<Value>()
-            guard let base else { return try strategy.merge(ours: ours, theirs: theirs) }
-            return try strategy.merge(base: base, ours: ours, theirs: theirs)
+            guard let base else { return strategy.merge(ours: ours, theirs: theirs) }
+            return strategy.merge(base: base, ours: ours, theirs: theirs)
         }
     }
 }

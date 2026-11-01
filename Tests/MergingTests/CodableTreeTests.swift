@@ -59,7 +59,7 @@ struct Profile: Codable, Equatable, Mergeable {
         var theirs = base
         theirs.age = 31
         theirs.nickname = "Annie"
-        let merged = try ours.merging(with: theirs, from: base)
+        let merged = try #require(ours.merging(with: theirs, from: base))
         #expect(merged.name == "Ana B")
         #expect(merged.age == 31)
         #expect(merged.nickname == "Annie")
@@ -70,7 +70,7 @@ struct Profile: Codable, Equatable, Mergeable {
         ours.tags.append("ours")
         var theirs = base
         theirs.tags.append("theirs")
-        #expect(try ours.merging(with: theirs, from: base).tags == ["a", "b", "c", "ours", "theirs"])
+        #expect(ours.merging(with: theirs, from: base)?.tags == ["a", "b", "c", "ours", "theirs"])
     }
 
     @Test func aRemovalAndAnInsertBothApply() throws {
@@ -78,7 +78,7 @@ struct Profile: Codable, Equatable, Mergeable {
         ours.tags.removeAll { $0 == "b" }
         var theirs = base
         theirs.tags.insert("first", at: 0)
-        #expect(try ours.merging(with: theirs, from: base).tags == ["first", "a", "c"])
+        #expect(ours.merging(with: theirs, from: base)?.tags == ["first", "a", "c"])
     }
 
     @Test func editsToDifferentFieldsOfOneElementMerge() throws {
@@ -86,7 +86,7 @@ struct Profile: Codable, Equatable, Mergeable {
         ours.items[1].title = "Second"
         var theirs = base
         theirs.items[1].done = true
-        #expect(try ours.merging(with: theirs, from: base).items == [Item(title: "One"), Item(title: "Second", done: true)])
+        #expect(ours.merging(with: theirs, from: base)?.items == [Item(title: "One"), Item(title: "Second", done: true)])
     }
 
     @Test func dictionariesMergeByKey() throws {
@@ -94,7 +94,7 @@ struct Profile: Codable, Equatable, Mergeable {
         ours.scores["art"] = 2
         var theirs = base
         theirs.scores["math"] = 3
-        #expect(try ours.merging(with: theirs, from: base).scores == ["math": 3, "art": 2])
+        #expect(ours.merging(with: theirs, from: base)?.scores == ["math": 3, "art": 2])
     }
 
     @Test func bothChangingAFieldIsAConflict() {
@@ -102,7 +102,7 @@ struct Profile: Codable, Equatable, Mergeable {
         ours.name = "Ana B"
         var theirs = base
         theirs.name = "Ana C"
-        #expect(throws: MergeConflict<Profile>.self) { try ours.merging(with: theirs, from: base) }
+        #expect(ours.merging(with: theirs, from: base) == nil)
     }
 
     @Test func aMergeThatWontDecodeIsAConflict() {
@@ -110,14 +110,14 @@ struct Profile: Codable, Equatable, Mergeable {
         ours.status = .archived(reason: "Old")
         var theirs = base
         theirs.status = .scheduled(at: .distantFuture)
-        #expect(throws: MergeConflict<Profile>.self) { try ours.merging(with: theirs, from: base) }
+        #expect(ours.merging(with: theirs, from: base) == nil)
     }
 
     @Test func twoWayMergesOnlyEqualValues() throws {
-        #expect(try base.merging(with: base) == base)
+        #expect(base.merging(with: base) == base)
         var theirs = base
         theirs.age = 31
-        #expect(throws: MergeConflict<Profile>.self) { try base.merging(with: theirs) }
+        #expect(base.merging(with: theirs) == nil)
     }
 
     @Test func aCodablePropertyOfAMergeableStructMergesByItsTree() throws {
@@ -125,7 +125,7 @@ struct Profile: Codable, Equatable, Mergeable {
         ours.lead.name = "Bo"
         var theirs = Team()
         theirs.lead.age = 40
-        let merged = try ours.merging(with: theirs, from: Team())
+        let merged = try #require(ours.merging(with: theirs, from: Team()))
         #expect(merged.lead.name == "Bo")
         #expect(merged.lead.age == 40)
     }
@@ -136,25 +136,18 @@ struct Team: Codable, Mergeable {
 }
 
 @Suite struct TreeArrayMergeTests {
-    @Test func bothReplacingAnElementDifferentlyIsAConflictNamingIt() {
+    @Test func bothReplacingAnElementDifferentlyIsAConflict() {
         let base = CodableTree.array([.string("a"), .string("b")])
         let ours = CodableTree.array([.string("a"), .string("x")])
         let theirs = CodableTree.array([.string("a"), .string("y")])
-        do {
-            _ = try ours.merging(with: theirs, from: base)
-            Issue.record("Expected a conflict")
-        } catch {
-            #expect(error.base == .string("b"))
-            #expect(error.ours == .string("x"))
-            #expect(error.theirs == .string("y"))
-        }
+        #expect(ours.merging(with: theirs, from: base) == nil)
     }
 
     @Test func oneSideChangingAndTheOtherRemovingKeepsTheChange() throws {
         let base = CodableTree.array([.string("a"), .string("b"), .string("c")])
         let ours = CodableTree.array([.string("a"), .string("B"), .string("c")])
         let theirs = CodableTree.array([.string("a"), .string("c")])
-        #expect(try ours.merging(with: theirs, from: base) == .array([.string("a"), .string("B"), .string("c")]))
+        #expect(ours.merging(with: theirs, from: base) == .array([.string("a"), .string("B"), .string("c")]))
     }
 }
 

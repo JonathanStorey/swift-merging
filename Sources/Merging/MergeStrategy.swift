@@ -9,47 +9,33 @@
 /// struct LongerMerge: MergeStrategy {
 ///     typealias Value = String
 ///
-///     func merge(base: String, ours: String, theirs: String) -> String {
+///     func merge(base: String, ours: String, theirs: String) -> String? {
 ///         ours.count >= theirs.count ? ours : theirs
 ///     }
 /// }
 /// ```
 ///
-/// A strategy is made with `init()` when a value is decoded, so it holds no settings of its own. A
-/// non-generic strategy whose merge doesn't throw names its value with `typealias Value`.
+/// A strategy returns `nil` when the versions can't be merged. It's made with `init()` when a value is
+/// decoded, so it holds no settings of its own.
 public protocol MergeStrategy<Value>: Sendable {
     associatedtype Value: Sendable
 
     init()
-    func merge(base: Value, ours: Value, theirs: Value) throws(MergeConflict<Value>) -> Value
-    func merge(ours: Value, theirs: Value) throws(MergeConflict<Value>) -> Value
+    /// The merged value, or `nil` if the versions can't be merged.
+    func merge(base: Value, ours: Value, theirs: Value) -> Value?
+    /// The merged value without a base, or `nil` if the versions can't be merged without one.
+    func merge(ours: Value, theirs: Value) -> Value?
 }
 
 extension MergeStrategy {
-    /// Without a base, a strategy can't tell what either side changed, so this is a conflict.
-    public func merge(ours: Value, theirs: Value) throws(MergeConflict<Value>) -> Value {
-        throw MergeConflict(ours: ours, theirs: theirs)
-    }
+    /// Without a base, a strategy can't tell what either side changed, so this is `nil`.
+    public func merge(ours: Value, theirs: Value) -> Value? { nil }
 }
 
 extension MergeStrategy where Value: Equatable {
-    /// Without a base, equal values merge, as they do inside a whole value's merge, and anything else is a
-    /// conflict.
-    public func merge(ours: Value, theirs: Value) throws(MergeConflict<Value>) -> Value {
-        guard ours == theirs else { throw MergeConflict(ours: ours, theirs: theirs) }
-        return ours
-    }
-}
-
-/// The versions that couldn't be merged. `base` is `nil` for a two-way merge.
-public struct MergeConflict<Value: Sendable>: Error {
-    public let base: Value?
-    public let ours: Value
-    public let theirs: Value
-
-    public init(base: Value? = nil, ours: Value, theirs: Value) {
-        self.base = base
-        self.ours = ours
-        self.theirs = theirs
+    /// Without a base, equal values merge, as they do inside a whole value's merge, and anything else is
+    /// `nil`.
+    public func merge(ours: Value, theirs: Value) -> Value? {
+        ours == theirs ? ours : nil
     }
 }

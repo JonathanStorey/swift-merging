@@ -45,32 +45,39 @@ extension Merged {
 extension Merged {
     /// Merges `theirs` into this property's value, which is ours, as the whole value's merge would: a side
     /// only one changed keeps that side, and the strategy decides when both did.
-    public func merging(with theirs: Value, from base: Value) throws(MergeConflict<Value>) -> Value {
+    public func merging(with theirs: Value, from base: Value) -> Value? {
         do {
             return try decode(node(wrappedValue).merging(with: node(theirs), from: node(base)))
         } catch {
-            throw MergeConflict(base: base, ours: wrappedValue, theirs: theirs)
+            return nil
         }
     }
 
     /// Merges `theirs` into this property's value without a common ancestor, if the strategy can.
-    public func merging(with theirs: Value) throws(MergeConflict<Value>) -> Value {
+    public func merging(with theirs: Value) -> Value? {
         do {
             return try decode(node(wrappedValue).merging(with: node(theirs)))
         } catch {
-            throw MergeConflict(ours: wrappedValue, theirs: theirs)
+            return nil
         }
     }
 
-    /// Merges `theirs` into this property's value. On a conflict the value is left unchanged.
-    public mutating func merge(with theirs: Value, from base: Value) throws(MergeConflict<Value>) {
-        wrappedValue = try merging(with: theirs, from: base)
+    /// Merges `theirs` into this property's value, and returns whether it could. If it couldn't, the value
+    /// is left unchanged.
+    @discardableResult
+    public mutating func merge(with theirs: Value, from base: Value) -> Bool {
+        guard let merged = merging(with: theirs, from: base) else { return false }
+        wrappedValue = merged
+        return true
     }
 
-    /// Merges `theirs` into this property's value without a common ancestor. On a conflict the value is left
-    /// unchanged.
-    public mutating func merge(with theirs: Value) throws(MergeConflict<Value>) {
-        wrappedValue = try merging(with: theirs)
+    /// Merges `theirs` into this property's value without a common ancestor, and returns whether it could.
+    /// If it couldn't, the value is left unchanged.
+    @discardableResult
+    public mutating func merge(with theirs: Value) -> Bool {
+        guard let merged = merging(with: theirs) else { return false }
+        wrappedValue = merged
+        return true
     }
 
     /// A value as it sits in a merge tree, under this property's rule.
@@ -109,28 +116,25 @@ extension Merged: MergeRuled {
         if let shortcut = Strategy.self as? any MergeShortcut.Type { return shortcut.rule(for: Value.self) }
         let strategy = Strategy()
         if Strategy.Value.self == CodableTree.self {
-            return MergeRule { ours, theirs, base throws(MergeConflict<MergeTree>) in
-                do {
-                    let (mine, other) = (CodableTree(ours) as! Strategy.Value, CodableTree(theirs) as! Strategy.Value)
-                    let merged = if let base {
-                        try strategy.merge(base: CodableTree(base) as! Strategy.Value, ours: mine, theirs: other)
-                    } else {
-                        try strategy.merge(ours: mine, theirs: other)
-                    }
-                    return MergeTree(merged as! CodableTree)
-                } catch {
-                    throw MergeConflict(base: base, ours: ours, theirs: theirs)
+            return MergeRule { ours, theirs, base throws(MergeClash) in
+                let (mine, other) = (CodableTree(ours) as! Strategy.Value, CodableTree(theirs) as! Strategy.Value)
+                let merged = if let base {
+                    strategy.merge(base: CodableTree(base) as! Strategy.Value, ours: mine, theirs: other)
+                } else {
+                    strategy.merge(ours: mine, theirs: other)
                 }
+                guard let merged else { throw MergeClash() }
+                return MergeTree(merged as! CodableTree)
             }
         }
         return MergeRule(Value.self) { ours, theirs, base in
             let (mine, other) = (ours as! Strategy.Value, theirs as! Strategy.Value)
             let merged = if let base {
-                try strategy.merge(base: base as! Strategy.Value, ours: mine, theirs: other)
+                strategy.merge(base: base as! Strategy.Value, ours: mine, theirs: other)
             } else {
-                try strategy.merge(ours: mine, theirs: other)
+                strategy.merge(ours: mine, theirs: other)
             }
-            return merged as! Value
+            return merged.map { $0 as! Value }
         }
     }
 }

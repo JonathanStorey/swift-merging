@@ -8,11 +8,11 @@
 public struct SetAlgebraUnionMerge<Value: SetAlgebra & Sendable>: MergeStrategy {
     public init() {}
 
-    public func merge(base: Value, ours: Value, theirs: Value) -> Value {
+    public func merge(base: Value, ours: Value, theirs: Value) -> Value? {
         SetAlgebraMembershipMerge().merge(base: base, ours: ours, theirs: theirs)
     }
 
-    public func merge(ours: Value, theirs: Value) -> Value { ours.union(theirs) }
+    public func merge(ours: Value, theirs: Value) -> Value? { ours.union(theirs) }
 }
 
 /// The shortcut for `SetAlgebraUnionMerge`, as `.union`.
@@ -21,7 +21,7 @@ public struct UnionShortcut: MergeStrategy, MergeShortcut {
 
     public init() {}
 
-    public func merge(base: Never, ours: Never, theirs: Never) -> Never {}
+    public func merge(base: Never, ours: Never, theirs: Never) -> Never? {}
 
     static func rule<Value: Codable & Sendable>(for type: Value.Type) -> MergeRule {
         MergeRule(type) { ours, theirs, base in

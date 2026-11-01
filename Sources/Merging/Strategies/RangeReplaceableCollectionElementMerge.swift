@@ -10,7 +10,7 @@ public struct RangeReplaceableCollectionElementMerge<Value: RangeReplaceableColl
 where Value.Element: Equatable {
     public init() {}
 
-    public func merge(base: Value, ours: Value, theirs: Value) throws(MergeConflict<Value>) -> Value {
+    public func merge(base: Value, ours: Value, theirs: Value) -> Value? {
         do {
             let merged = try mergeElements(Array(ours), Array(theirs), base: Array(base)) { ours, theirs, _ throws(ElementConflict) in
                 guard ours == theirs else { throw ElementConflict() }
@@ -20,12 +20,12 @@ where Value.Element: Equatable {
             }
             return Value(merged)
         } catch {
-            throw MergeConflict(base: base, ours: ours, theirs: theirs)
+            return nil
         }
     }
 
-    public func merge(ours: Value, theirs: Value) throws(MergeConflict<Value>) -> Value {
-        guard ours.elementsEqual(theirs) else { throw MergeConflict(ours: ours, theirs: theirs) }
+    public func merge(ours: Value, theirs: Value) -> Value? {
+        guard ours.elementsEqual(theirs) else { return nil }
         return ours
     }
 }
@@ -40,10 +40,10 @@ public struct ByElementShortcut: MergeStrategy, MergeShortcut {
 
     public init() {}
 
-    public func merge(base: Never, ours: Never, theirs: Never) -> Never {}
+    public func merge(base: Never, ours: Never, theirs: Never) -> Never? {}
 
     static func rule<Value: Codable & Sendable>(for type: Value.Type) -> MergeRule {
-        MergeRule { ours, theirs, base throws(MergeConflict<MergeTree>) in
+        MergeRule { ours, theirs, base throws(MergeClash) in
             guard case .string = ours else {
                 guard let base else { return try ours.merging(with: theirs) }
                 return try ours.merging(with: theirs, from: base)

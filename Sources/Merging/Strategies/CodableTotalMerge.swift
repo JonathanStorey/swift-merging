@@ -1,4 +1,4 @@
-/// Merges a `Codable` value node by node like `CodableNodeMerge`, but never throws: every change that doesn't
+/// Merges a `Codable` value node by node like `CodableNodeMerge`, but never returns `nil`: every change that doesn't
 /// clash still applies, from both sides, and a value both sides changed differently takes `Side`, as
 /// `git merge -X theirs` does. A result that doesn't decode keeps that whole side.
 ///
@@ -10,7 +10,7 @@
 public struct CodableTotalMerge<Value: Codable & Sendable, Side: SideMarker>: MergeStrategy {
     public init() {}
 
-    public func merge(base: Value, ours: Value, theirs: Value) -> Value {
+    public func merge(base: Value, ours: Value, theirs: Value) -> Value? {
         do {
             let encoder = TreeEncoder()
             let merged = try encoder.encode(ours).merging(with: encoder.encode(theirs), from: encoder.encode(base), favoring: Side.side)
@@ -20,7 +20,7 @@ public struct CodableTotalMerge<Value: Codable & Sendable, Side: SideMarker>: Me
         }
     }
 
-    public func merge(ours: Value, theirs: Value) -> Value {
+    public func merge(ours: Value, theirs: Value) -> Value? {
         do {
             let encoder = TreeEncoder()
             let merged = try encoder.encode(ours).merging(with: encoder.encode(theirs), favoring: Side.side)
@@ -37,7 +37,7 @@ public struct TotalShortcut<Side: SideMarker>: MergeStrategy, MergeShortcut {
 
     public init() {}
 
-    public func merge(base: Never, ours: Never, theirs: Never) -> Never {}
+    public func merge(base: Never, ours: Never, theirs: Never) -> Never? {}
 
     static func rule<Value: Codable & Sendable>(for type: Value.Type) -> MergeRule {
         MergeRule(type) { ours, theirs, base in

@@ -249,7 +249,7 @@ still applies, from both sides, and a value both sides changed differently takes
 
 - **Good for:** a sync engine's default merge, which must always produce a record.
 - **Needs a base:** No. Without one, every difference takes the favored side.
-- **Conflicts:** never. Its `merge` doesn't throw. A result that doesn't decode keeps that whole side.
+- **Conflicts:** never. Its `merge` never returns `nil`. A result that doesn't decode keeps that whole side.
 - **Called directly**, the side is a type, so a sync engine that knows which side is newer picks one for
   each merge:
 

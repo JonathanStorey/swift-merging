@@ -38,27 +38,32 @@ extension MergeTree {
     }
 }
 
+/// Two versions of part of a tree that can't be merged, which ends the merge.
+struct MergeClash: Error {}
+
 /// How part of a tree merges when it isn't by its shape: a `@Merged` strategy, or a nested `Mergeable`
 /// type's own merge. It decodes the versions, merges them, and encodes the result. Rules don't take part in
 /// equality, so two trees are equal when their data is.
 struct MergeRule: Sendable, Equatable {
     /// Merges ours, theirs, and the base when there is one.
-    let merge: @Sendable (MergeTree, MergeTree, MergeTree?) throws(MergeConflict<MergeTree>) -> MergeTree
+    let merge: @Sendable (MergeTree, MergeTree, MergeTree?) throws(MergeClash) -> MergeTree
 
-    init<Value: Codable & Sendable>(_ type: Value.Type, merge: @escaping @Sendable (Value, Value, Value?) throws -> Value) {
-        self.merge = { ours, theirs, base throws(MergeConflict<MergeTree>) in
+    init<Value: Codable & Sendable>(_ type: Value.Type, merge: @escaping @Sendable (Value, Value, Value?) throws -> Value?) {
+        self.merge = { ours, theirs, base throws(MergeClash) in
             do {
                 let decoder = TreeDecoder()
                 let original = try base.map { try decoder.decode(Value.self, from: $0) }
-                let merged = try merge(decoder.decode(Value.self, from: ours), decoder.decode(Value.self, from: theirs), original)
+                guard let merged = try merge(decoder.decode(Value.self, from: ours), decoder.decode(Value.self, from: theirs), original) else {
+                    throw MergeClash()
+                }
                 return try TreeEncoder().encode(merged)
             } catch {
-                throw MergeConflict(base: base, ours: ours, theirs: theirs)
+                throw MergeClash()
             }
         }
     }
 
-    init(merge: @escaping @Sendable (MergeTree, MergeTree, MergeTree?) throws(MergeConflict<MergeTree>) -> MergeTree) {
+    init(merge: @escaping @Sendable (MergeTree, MergeTree, MergeTree?) throws(MergeClash) -> MergeTree) {
         self.merge = merge
     }
 
