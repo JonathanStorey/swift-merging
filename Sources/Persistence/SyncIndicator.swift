@@ -1,4 +1,5 @@
 #if canImport(SwiftData) && canImport(SwiftUI)
+import SwiftData
 import SwiftUI
 
 /// A small iCloud symbol and caption for a container's sync state, such as for a toolbar.
@@ -32,6 +33,14 @@ public struct SyncIndicator: View {
             if monitor.pendingUploadCount > 0 { return "\(monitor.pendingUploadCount) waiting to upload" }
             return "Up to date"
         }
+    }
+}
+
+extension View {
+    /// Puts `container`'s sync monitor in the environment, for `@Environment(SyncMonitor.self)` below.
+    @MainActor
+    public func syncMonitor(for container: ModelContainer) -> some View {
+        environment(container.sync)
     }
 }
 

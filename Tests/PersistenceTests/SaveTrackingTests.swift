@@ -26,24 +26,28 @@ import Testing
         }
     }
 
-    @Test func syncStatusReadsTheSharedLedger() throws {
+    @MainActor
+    @Test func contextSyncReadsTheSharedLedger() throws {
         SyncTracking.start(defaultsSuite: freshSuite())
         let fixture = try ModelFixture()
         let context = ModelContext(fixture.container)
         let item = Item("first")
         context.insert(item)
-        #expect(context.syncStatus(of: item) == .unsaved)
+        #expect(context.sync.status(of: item) == .unsaved)
 
         try context.save()
-        #expect(context.syncStatus(of: item) == .localOnly)
+        #expect(context.sync.status(of: item) == .localOnly)
 
         SyncLedger.shared.record(cloudStores: [fixture.store])
-        guard case .pending = context.syncStatus(of: item) else {
-            Issue.record("Expected pending, got \(context.syncStatus(of: item))")
+        guard case .pending = context.sync.status(of: item) else {
+            Issue.record("Expected pending, got \(context.sync.status(of: item))")
             return
         }
         item.name = "second"
-        #expect(context.syncStatus(of: item) == .unsaved)
+        #expect(context.sync.status(of: item) == .unsaved)
+        // One monitor per container, whichever context asks.
+        #expect(context.sync.monitor === fixture.container.sync)
+        #expect(context.sync.activity == .idle)
     }
 
     @Test func cloudKitClearingNeedsUploadMarksTheObjectSynced() throws {

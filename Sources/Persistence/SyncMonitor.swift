@@ -11,7 +11,9 @@ import SwiftData
 /// stores too, and to the iCloud account. There's no public way to start a sync, so it offers the honest
 /// alternatives: a save starts an export, and the `wait` methods return once CloudKit confirms the work.
 ///
-/// Get one from `container.syncMonitor` or `context.syncMonitor`, which keep one per container.
+/// There's one per container, since sync happens per store and every context on a container shares its
+/// stores. Get it from `container.sync`, or from `context.sync`, which also knows the context to save, or
+/// from the SwiftUI environment with `@Environment(SyncMonitor.self)` after `.syncMonitor(for:)`.
 @MainActor
 @Observable
 public final class SyncMonitor {
@@ -41,6 +43,8 @@ public final class SyncMonitor {
     public private(set) var isSyncing = false
     /// The latest finished events, newest last, up to 50.
     public private(set) var recentEvents: [SyncEvent] = []
+    /// Bumped whenever any object's status changes, so a view reading `status(of:)` updates.
+    private(set) var revision = 0
 
     /// The CloudKit container whose account status it checks.
     public let cloudKitContainerIdentifier: String?
@@ -71,6 +75,29 @@ public final class SyncMonitor {
         refreshStoreIdentifiers()
         refreshFromLedger()
         if observes { startObserving() }
+    }
+
+    // MARK: - Objects
+
+    /// Where `model` stands with iCloud: unsaved, waiting to upload, or synced, as far as this device has
+    /// seen since tracking started. A view that reads it updates when it changes.
+    ///
+    /// Tracking starts with `SyncTracking.start()` or the first monitor, so start it at launch. An object no
+    /// save or sync has touched since then reads `.unknown`.
+    public func status(of model: some PersistentModel) -> SyncStatus {
+        _ = revision
+        return Self.status(of: model, in: ledger)
+    }
+
+    /// Whether the server has every one of `models` as this device last saved it.
+    public func isSynced(_ models: [any PersistentModel]) -> Bool {
+        models.allSatisfy { status(of: $0).isSynced }
+    }
+
+    nonisolated static func status(of model: some PersistentModel, in ledger: SyncLedger) -> SyncStatus {
+        if model.hasChanges { return .unsaved }
+        guard let key = StoreRecords.key(of: model.persistentModelID) else { return .unknown }
+        return ledger.status(ofKey: key)
     }
 
     // MARK: - Waiting
@@ -186,6 +213,7 @@ public final class SyncMonitor {
     }
 
     private func refreshFromLedger() {
+        revision &+= 1
         let count = ledger.pendingCount(inStores: storeIdentifiers)
         if pendingUploadCount != count { pendingUploadCount = count }
         if !isSyncing, storeIdentifiers.contains(where: ledger.isCloudStore) { isSyncing = true }
@@ -264,7 +292,7 @@ extension ModelContainer {
     /// The container's sync monitor, made the first time it's asked for and kept as long as the app runs.
     /// Asking for it early, such as where the container is made, also starts tracking each object's status.
     @MainActor
-    public var syncMonitor: SyncMonitor {
+    public var sync: SyncMonitor {
         if let monitor = monitors[ObjectIdentifier(self)] { return monitor }
         let monitor = SyncMonitor(container: self)
         monitors[ObjectIdentifier(self)] = monitor

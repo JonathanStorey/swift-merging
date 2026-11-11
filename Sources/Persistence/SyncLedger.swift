@@ -195,11 +195,11 @@ final class SyncLedger: @unchecked Sendable {
     }
 }
 
-/// Tracking every object's sync state, which `ModelContext.syncStatus(of:)` reads.
+/// Tracking every object's sync state, which `SyncMonitor.status(of:)` reads.
 public enum SyncTracking {
     /// Starts tracking, saving what it learns in the `UserDefaults` suite named `defaultsSuite`, such as an
     /// App Group's, or the standard defaults. Call it once at launch, before the first save, so no change
-    /// goes unseen. Getting a container's `syncMonitor` starts it too, with the standard defaults.
+    /// goes unseen. Getting a container's `sync` monitor starts it too, with the standard defaults.
     public static func start(defaultsSuite: String? = nil) {
         SyncLedger.start(defaultsSuite: defaultsSuite)
     }

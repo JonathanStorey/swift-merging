@@ -211,28 +211,38 @@ about CloudKit sync: whether it's running, whether an object has reached the ser
 confirmed. It uses public API only. It reads CloudKit's events, the save notifications every Core Data save
 posts, and CloudKit's per-object metadata rows as those saves carry them.
 
+There's one monitor per container, since CloudKit syncs each store on its own and every context on a
+container shares its stores. `container.sync` owns it, `context.sync` reaches the same one with the context
+alongside so it can save, and `.syncMonitor(for:)` puts it in the SwiftUI environment.
+
 ```swift
 import Persistence
 
 // At launch, so no save goes unseen.
 let container = try ModelContainer(for: Note.self)
-let monitor = container.syncMonitor
+_ = container.sync
 
-// In a view: an iCloud symbol and "Up to date", "Uploading", "3 waiting to upload", or the problem.
-SyncIndicator(monitor)
+// The root view puts it in the environment, and any view below reads it.
+ContentView().syncMonitor(for: container)
+@Environment(SyncMonitor.self) private var sync
 
-// One object: .unsaved, .pending(since:), .synced(at:), .localOnly or .unknown.
-context.syncStatus(of: note)
+// An iCloud symbol and "Up to date", "Uploading", "3 waiting to upload", or the problem.
+SyncIndicator(sync)
+
+// Or from a context, as views already have one.
+context.sync.activity                     // .idle, .settingUp, .importing, .exporting
+context.sync.status(of: note)             // .unsaved, .pending(since:), .synced(at:), .localOnly, .unknown
 
 // "Sync now", as far as public API goes: save, which starts an upload, then wait for CloudKit to confirm it.
-let result = try await context.saveAndWaitForUpload(timeout: .seconds(30))   // .completed, .timedOut, .failed, .notSyncing
+let result = try await context.sync.saveAndWait(timeout: .seconds(30))   // .completed, .timedOut, .failed, .notSyncing
 ```
 
-`SyncMonitor` is `@Observable` and shows the activity (idle, setting up, importing, exporting), the last
-import and export, the latest problem (not signed in, storage full, offline, busy), the iCloud account status,
-and how many objects are waiting to upload. `waitForExport(startedAfter:)`, `waitForImport()` and
-`waitForSync()` wait for CloudKit's own events. There's no public way to start an import, so
-`waitForImport` returns when CloudKit next imports, at launch, on returning to the foreground, or on a push.
+`SyncMonitor` is `@Observable` and shows the activity, the last import and export, the latest problem (not
+signed in, storage full, offline, busy), the iCloud account status, and how many objects are waiting to
+upload. A view reading `status(of:)` updates when that object's status changes. `waitForExport(startedAfter:)`,
+`waitForImport()` and `waitForSync()` wait for CloudKit's own events. There's no public way to start an
+import, so `waitForImport` returns when CloudKit next imports, at launch, on returning to the foreground, or on
+a push.
 
 Each object's state is kept by its Core Data URI in `UserDefaults`, so it survives a relaunch.
 `SyncTracking.start(defaultsSuite:)` picks another suite, such as an App Group's. An object no save or sync has
