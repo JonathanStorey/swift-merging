@@ -39,6 +39,10 @@ public protocol MergeLedger: AnyObject {
     /// started then has sent it.
     func promoteLocalSaves(through date: Date)
 
+    /// Makes an object's latest local save from `date` or before its agreed base, since the sync service
+    /// confirmed it sent the object in an export that started then.
+    func promoteLocalSaves(for id: PersistentIdentifier, through date: Date)
+
     /// Saves everything together.
     func save() throws
 }
@@ -54,29 +58,35 @@ struct PendingLocalSave: Codable {
 @MainActor
 public final class InMemoryMergeLedger: MergeLedger {
     public var token: DefaultHistoryToken?
-    private var bases: [PersistentIdentifier: Data] = [:]
-    private var agreed: [PersistentIdentifier: Data] = [:]
-    private var pending: [PersistentIdentifier: [PendingLocalSave]] = [:]
+    // Keyed by `MergeRelationship.key`, so an identifier rebuilt from a key finds the same entry.
+    private var bases: [String: Data] = [:]
+    private var agreed: [String: Data] = [:]
+    private var pending: [String: [PendingLocalSave]] = [:]
 
     public init() {}
 
-    public func base(for id: PersistentIdentifier) -> Data? { bases[id] }
+    public func base(for id: PersistentIdentifier) -> Data? { bases[MergeRelationship.key(id)] }
 
-    public func setBase(_ base: Data?, for id: PersistentIdentifier) { bases[id] = base }
+    public func setBase(_ base: Data?, for id: PersistentIdentifier) { bases[MergeRelationship.key(id)] = base }
 
-    public func agreedBase(for id: PersistentIdentifier) -> Data? { agreed[id] }
+    public func agreedBase(for id: PersistentIdentifier) -> Data? { agreed[MergeRelationship.key(id)] }
 
     public func setAgreedBase(_ base: Data?, for id: PersistentIdentifier) {
-        agreed[id] = base
-        pending[id] = nil
+        let key = MergeRelationship.key(id)
+        agreed[key] = base
+        pending[key] = nil
     }
 
     public func recordLocalSave(_ snapshot: Data, for id: PersistentIdentifier, at date: Date) {
-        pending[id, default: []].append(PendingLocalSave(date: date, snapshot: snapshot))
+        pending[MergeRelationship.key(id), default: []].append(PendingLocalSave(date: date, snapshot: snapshot))
     }
 
     public func promoteLocalSaves(through date: Date) {
         promote(&pending, into: &agreed, through: date)
+    }
+
+    public func promoteLocalSaves(for id: PersistentIdentifier, through date: Date) {
+        promote(&pending, into: &agreed, through: date, only: MergeRelationship.key(id))
     }
 
     public func save() throws {}
@@ -143,14 +153,20 @@ public final class FileMergeLedger: MergeLedger {
         promote(&contents.pending, into: &contents.agreed, through: date)
     }
 
+    public func promoteLocalSaves(for id: PersistentIdentifier, through date: Date) {
+        promote(&contents.pending, into: &contents.agreed, through: date, only: MergeRelationship.key(id))
+    }
+
     public func save() throws {
         try JSONEncoder().encode(contents).write(to: url, options: .atomic)
     }
 }
 
-/// Moves each object's latest pending save from `date` or before into `agreed`, and drops those saves.
-private func promote<Key: Hashable>(_ pending: inout [Key: [PendingLocalSave]], into agreed: inout [Key: Data], through date: Date) {
-    for (key, saves) in pending {
+/// Moves each object's latest pending save from `date` or before into `agreed`, and drops those saves. With
+/// `only`, just that object's.
+private func promote(_ pending: inout [String: [PendingLocalSave]], into agreed: inout [String: Data], through date: Date,
+                     only: String? = nil) {
+    for (key, saves) in pending where only == nil || only == key {
         let sent = saves.filter { $0.date <= date }
         guard let latest = sent.max(by: { $0.date < $1.date }) else { continue }
         agreed[key] = latest.snapshot

@@ -53,6 +53,11 @@ public struct MergeableModelMacro: ExtensionMacro {
             }
         }
         let keyPaths = properties.map { "\\\(typeName).\($0.name)" }.joined(separator: ", ")
+        // The attributes, not relationships, that merge by a strategy: the ones a sync service can leave behind.
+        let strategyProperties = properties.filter {
+            if case .value = $0.kind { return $0.strategy != nil }
+            return false
+        }.map { "\"\($0.name)\"" }.joined(separator: ", ")
         // Merging is opt-in. A property with `@Merge` merges by its strategy, through `Merged`. One without, or
         // whose strategy can't settle it, takes `side`, as SwiftData would.
         let merges = properties.map { property in
@@ -84,6 +89,10 @@ public struct MergeableModelMacro: ExtensionMacro {
 
             \(access)static var mergeKeyPaths: [PartialKeyPath<\(typeName)>] {
                 [\(keyPaths)]
+            }
+
+            \(access)static var mergeStrategyProperties: [String] {
+                [\(strategyProperties)]
             }
 
             \(access)static func mergeSnapshots(base: MergeSnapshot, ours: MergeSnapshot, theirs: MergeSnapshot, favoring side: Merging.MergeSide) -> MergeSnapshot {

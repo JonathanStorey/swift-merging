@@ -49,9 +49,18 @@ public protocol MergeableModel: PersistentModel {
     /// The merged properties, so a change to anything else is left alone.
     static var mergeKeyPaths: [PartialKeyPath<Self>] { get }
 
+    /// The snapshot's attributes that merge by a strategy, by name. A sync service that keeps one side's
+    /// value of one of these, as CloudKit does while this device's edit waits to export, has the other
+    /// side's value fetched so the two still merge. Empty by default.
+    static var mergeStrategyProperties: [String] { get }
+
     /// Merges two edits of a snapshot property by property. A property with no strategy, or whose strategy
     /// can't combine the two, takes `side`, and every other property still merges.
     static func mergeSnapshots(base: MergeSnapshot, ours: MergeSnapshot, theirs: MergeSnapshot, favoring side: MergeSide) -> MergeSnapshot
+}
+
+extension MergeableModel {
+    public static var mergeStrategyProperties: [String] { [] }
 }
 
 extension MergeableModel where MergeSnapshot: Mergeable {

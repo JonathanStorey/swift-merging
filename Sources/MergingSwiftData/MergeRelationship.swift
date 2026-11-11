@@ -90,7 +90,7 @@ public enum MergeRelationship {
 }
 
 /// A Core Data URI's parts: `x-coredata://<store>/<entity>/<primary key>`.
-private struct CoreDataURI {
+struct CoreDataURI {
     let text: String
     let store: String
     let entity: String

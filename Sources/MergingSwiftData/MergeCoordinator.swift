@@ -33,7 +33,7 @@ public final class MergeCoordinator {
     public static let localAuthor = "Merging.local"
 
     /// The author CloudKit gives the transactions it imports.
-    public static let cloudKitImportAuthor = "NSCloudKitMirroringDelegate.import"
+    public static let cloudKitImportAuthor = CloudKitNames.importAuthor
 
     public let container: ModelContainer
     public let ledger: any MergeLedger
@@ -42,8 +42,18 @@ public final class MergeCoordinator {
     public let importAuthors: Set<String>
 
     let capture: StoreChangeCapture
+    /// Where a fetch reads what the sync service holds, when the store kept only this device's value.
+    var remoteSource: (any RemoteRecordSource)?
     private let handlers: [any ModelMergeHandler]
     private var isMerging = false
+    /// Objects waiting for a fetch of what the sync service holds, by Core Data URI.
+    private var awaiting: [String: AwaitingFetch] = [:]
+    private var fetchTask: Task<Void, Never>?
+    private var fetchRound = 0
+    /// When the latest export started, as the sync service reported it.
+    private var latestExportStart: Date?
+    /// Whether CloudKit has confirmed exporting any object, so exports needn't be judged by time alone.
+    private var hasSeenExportConfirmation = false
     private nonisolated(unsafe) var observers: [any NSObjectProtocol] = []
 
     /// A coordinator for `types` in `container`. It sets the main context's author, starts noting the
@@ -56,8 +66,10 @@ public final class MergeCoordinator {
         self.conflictPolicy = conflictPolicy
         self.importAuthors = importAuthors
         handlers = types.map { makeHandler(for: $0) }
-        capture = StoreChangeCapture(storeURL: container.configurations.first?.url, ignoredAuthors: [Self.localAuthor])
+        capture = StoreChangeCapture(storeURL: container.configurations.first?.url, ignoredAuthors: [Self.localAuthor],
+                                     importAuthors: importAuthors)
         capture.start()
+        remoteSource = CloudKitRecordSource(capture: capture, containerIdentifier: container.configurations.first?.cloudKitContainerIdentifier)
         container.mainContext.author = Self.localAuthor
         if self.ledger.token == nil { try seed() }
     }
@@ -81,7 +93,6 @@ public final class MergeCoordinator {
             descriptor.predicate = #Predicate { $0.token > token }
         }
         let transactions = try reader.fetchHistory(descriptor)
-        guard !transactions.isEmpty else { return }
 
         let writer = ModelContext(container)
         writer.author = Self.localAuthor
@@ -109,7 +120,76 @@ public final class MergeCoordinator {
         }
         // Merges of imports this device hadn't edited, saved as its own edits; the next pass reads them.
         if writer.hasChanges { try writer.save() }
-        try ledger.save()
+        let synced = try applySyncNotes(in: pass)
+        if !transactions.isEmpty || synced { try ledger.save() }
+        awaiting.merge(pass.awaiting) { earlier, _ in earlier }
+        startRemoteFetches()
+    }
+
+    /// Waits for every fetch of what the sync service holds to finish and merge.
+    func finishRemoteFetches() async {
+        while let task = fetchTask { await task.value }
+    }
+
+    /// Applies what CloudKit's own saves said about objects. An export it confirmed makes what it sent the
+    /// agreed base. An import of an object with strategy properties this device changed and hasn't
+    /// exported queues a fetch, since CloudKit kept this device's values and dropped the other's.
+    private func applySyncNotes(in pass: MergePass) throws -> Bool {
+        let notes = capture.takeSyncNotes()
+        guard !notes.isEmpty else { return false }
+        let reader = ModelContext(container)
+        for note in notes {
+            if note.exported { hasSeenExportConfirmation = true }
+            guard let id = MergeRelationship.identifier(forKey: note.object) else { continue }
+            if note.exported {
+                ledger.promoteLocalSaves(for: id, through: min(latestExportStart ?? note.date, note.date))
+            }
+            if note.imported, pass.awaiting[note.object] == nil,
+               let entity = CoreDataURI(note.object)?.entity, let handler = handlers.first(where: { $0.entityName == entity }),
+               let entry = try handler.fetchNeeded(for: id, object: note.object, ledger: ledger, reader: reader) {
+                pass.awaiting[note.object] = entry
+            }
+        }
+        return true
+    }
+
+    /// Fetches what the sync service holds for each waiting object, then merges it, one batch after another.
+    private func startRemoteFetches() {
+        guard !awaiting.isEmpty, let source = remoteSource else { return }
+        let entries = Array(awaiting.values)
+        awaiting = [:]
+        let previous = fetchTask
+        fetchRound += 1
+        let round = fetchRound
+        fetchTask = Task { [weak self] in
+            await previous?.value
+            var results: [(AwaitingFetch, RemoteValues)] = []
+            var failed: [AwaitingFetch] = []
+            for entry in entries {
+                do {
+                    if let values = try await source.values(forObject: entry.object, keys: entry.keys) { results.append((entry, values)) }
+                } catch {
+                    failed.append(entry)
+                }
+            }
+            self?.resolve(results, retrying: failed, round: round)
+        }
+    }
+
+    private func resolve(_ results: [(AwaitingFetch, RemoteValues)], retrying failed: [AwaitingFetch], round: Int) {
+        // A fetch that failed, such as offline, is tried again after the next pass.
+        for entry in failed where awaiting[entry.object] == nil { awaiting[entry.object] = entry }
+        let writer = ModelContext(container)
+        writer.author = Self.localAuthor
+        writer.autosaveEnabled = false
+        for (entry, values) in results {
+            guard let handler = handlers.first(where: { $0.modelID == entry.model }) else { continue }
+            try? handler.resolve(entry, fetched: values.values, main: container.mainContext, writer: writer, ledger: ledger,
+                                 policy: conflictPolicy)
+        }
+        if writer.hasChanges { try? writer.save() }
+        try? ledger.save()
+        if fetchRound == round { fetchTask = nil }
     }
 
     /// Tells the coordinator a sync service started or finished work. A finished import merges what it
@@ -117,9 +197,13 @@ public final class MergeCoordinator {
     /// calls this for each of the container's events, so there's no need to call it yourself; another sync
     /// engine can.
     public func syncEventOccurred(_ event: MergeSyncEvent) {
-        guard event.endDate != nil else { return }
+        guard event.endDate != nil else {
+            if event.kind == .export { latestExportStart = event.startDate }
+            return
+        }
         mergeQuietly()
-        if event.kind == .export, event.succeeded {
+        // CloudKit confirms each object it exports, which beats judging by when the export started.
+        if event.kind == .export, event.succeeded, !hasSeenExportConfirmation {
             ledger.promoteLocalSaves(through: event.startDate)
             try? ledger.save()
         }
@@ -249,6 +333,19 @@ enum ChangeSource: Int, Comparable {
     static func < (lhs: Self, rhs: Self) -> Bool { lhs.rawValue < rhs.rawValue }
 }
 
+/// An object whose strategy properties the store kept at this device's values while the sync service may
+/// hold the other device's, waiting for a fetch.
+struct AwaitingFetch: Sendable {
+    /// The object's Core Data URI.
+    let object: String
+    let id: PersistentIdentifier
+    let model: ObjectIdentifier
+    /// The properties to fetch.
+    let keys: [String]
+    /// The agreed base, encoded: where both devices started.
+    let base: Data
+}
+
 /// An object's updates in one pass.
 struct PassUpdate {
     var source: ChangeSource
@@ -275,6 +372,8 @@ final class MergePass {
     /// The objects updated in this pass, merged once each at its end: the store holds only the last of
     /// their values, so that's what every update merges with.
     var updates: [PersistentIdentifier: PassUpdate] = [:]
+    /// Objects to fetch from the sync service once the pass ends, by Core Data URI.
+    var awaiting: [String: AwaitingFetch] = [:]
 
     init(reader: ModelContext, main: ModelContext, writer: ModelContext, ledger: any MergeLedger,
          conflictPolicy: MergeConflictPolicy, capture: StoreChangeCapture, finished: Set<Int>) {
@@ -292,7 +391,12 @@ final class MergePass {
 @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
 @MainActor
 protocol ModelMergeHandler {
+    var modelID: ObjectIdentifier { get }
+    var entityName: String { get }
     func seed(_ ledger: any MergeLedger, from reader: ModelContext) throws
+    func fetchNeeded(for id: PersistentIdentifier, object: String, ledger: any MergeLedger, reader: ModelContext) throws -> AwaitingFetch?
+    func resolve(_ entry: AwaitingFetch, fetched: [String: Any], main: ModelContext, writer: ModelContext,
+                 ledger: any MergeLedger, policy: MergeConflictPolicy) throws
     func handle(_ change: HistoryChange, from source: ChangeSource, at date: Date, in pass: MergePass) throws
     func mergeUpdates(in pass: MergePass) throws
 }
@@ -307,6 +411,10 @@ private func makeHandler<Model: MergeableModel>(for type: Model.Type) -> any Mod
 @MainActor
 struct ModelHandler<Model: MergeableModel>: ModelMergeHandler {
     typealias Snapshot = Model.MergeSnapshot
+
+    var modelID: ObjectIdentifier { ObjectIdentifier(Model.self) }
+    // SwiftData names an entity after its class.
+    var entityName: String { String(describing: Model.self) }
 
     func seed(_ ledger: any MergeLedger, from reader: ModelContext) throws {
         for model in try reader.fetch(FetchDescriptor<Model>()) {
@@ -379,10 +487,24 @@ struct ModelHandler<Model: MergeableModel>: ModelMergeHandler {
             // The import is written last, so without a merge it would win.
             let saved = before ?? theirs
             let agreed = try decode(pass.ledger.agreedBase(for: id))
+            // CloudKit keeps this device's value of a property it changed and hasn't exported, and drops the
+            // other device's. Such a property merges as if the other device left it, until a fetch says what
+            // it holds.
+            var sent = theirs
+            if let agreed {
+                let kept = SnapshotPatch.differingKeys(saved, agreed, among: Model.mergeStrategyProperties)
+                    .filter { SnapshotPatch.differingKeys(saved, theirs, among: [$0]).isEmpty }
+                if !kept.isEmpty {
+                    sent = SnapshotPatch.copying(kept, from: agreed, to: theirs)
+                    let object = MergeRelationship.key(id)
+                    pass.awaiting[object] = AwaitingFetch(object: object, id: id, model: modelID, keys: kept,
+                                                          base: try JSONEncoder().encode(sent))
+                }
+            }
             let merged = agreed.map {
-                Model.mergeSnapshots(base: $0, ours: saved, theirs: theirs, favoring: pass.conflictPolicy.side(whereStoreKeeps: .theirs))
+                Model.mergeSnapshots(base: $0, ours: saved, theirs: sent, favoring: pass.conflictPolicy.side(whereStoreKeeps: .theirs))
             } ?? theirs
-            pass.ledger.setAgreedBase(try JSONEncoder().encode(theirs), for: id)
+            pass.ledger.setAgreedBase(try JSONEncoder().encode(sent), for: id)
             if let dirty {
                 // Unsaved edits started from what was saved, and merge onto the merged import.
                 let ours = dirty.mergeSnapshot
@@ -395,6 +517,44 @@ struct ModelHandler<Model: MergeableModel>: ModelMergeHandler {
         }
         // The store holds theirs until a merge is saved, which makes a pass of its own.
         pass.ledger.setBase(try JSONEncoder().encode(theirs), for: id)
+    }
+
+    /// A fetch for an object the sync service imported, if this device has strategy properties it changed
+    /// since the agreed base: the import kept them, so the other device's values are still to come.
+    func fetchNeeded(for id: PersistentIdentifier, object: String, ledger: any MergeLedger, reader: ModelContext) throws -> AwaitingFetch? {
+        guard !Model.mergeStrategyProperties.isEmpty, let agreed = try decode(ledger.agreedBase(for: id)),
+              let saved = try fetch(id, in: reader) else { return nil }
+        let keys = SnapshotPatch.differingKeys(saved.mergeSnapshot, agreed, among: Model.mergeStrategyProperties)
+        guard !keys.isEmpty else { return nil }
+        return AwaitingFetch(object: object, id: id, model: modelID, keys: keys, base: try JSONEncoder().encode(agreed))
+    }
+
+    /// Merges what the sync service holds for an object's properties with what this device saved, from where
+    /// both started.
+    func resolve(_ entry: AwaitingFetch, fetched: [String: Any], main: ModelContext, writer: ModelContext,
+                 ledger: any MergeLedger, policy: MergeConflictPolicy) throws {
+        guard !fetched.isEmpty, let base = try decode(entry.base), let stored = try fetch(entry.id, in: writer) else { return }
+        let current = stored.mergeSnapshot
+        let remote = SnapshotPatch.apply(fetched, to: current, fallback: nil)
+        let remoteFromBase = SnapshotPatch.apply(fetched, to: base, fallback: nil)
+        if remote == current {
+            // The service already holds what this device saved: its export went out.
+            ledger.setAgreedBase(try JSONEncoder().encode(remoteFromBase), for: entry.id)
+            return
+        }
+        // The other device hasn't changed them, and this device's edit is still to export.
+        guard remoteFromBase != base else { return }
+        // CloudKit keeps this device's value where both changed a property, so a clash does too.
+        let side = policy.side(whereStoreKeeps: .ours)
+        let merged = Model.mergeSnapshots(base: base, ours: current, theirs: remote, favoring: side)
+        ledger.setAgreedBase(try JSONEncoder().encode(remoteFromBase), for: entry.id)
+        if let mine: Model = main.registeredModel(for: entry.id), mine.hasChanges {
+            let ours = mine.mergeSnapshot
+            let final = Model.mergeSnapshots(base: current, ours: ours, theirs: merged, favoring: side)
+            if final != ours { mine.applyMergeSnapshot(final) }
+        } else if merged != current {
+            stored.applyMergeSnapshot(merged)
+        }
     }
 
     /// The stored values, before this pass's saves, of the properties they changed, as the store reported

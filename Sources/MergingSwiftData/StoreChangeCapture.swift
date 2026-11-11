@@ -1,4 +1,5 @@
 #if canImport(SwiftData)
+import CloudKit
 import CoreData
 import Foundation
 
@@ -29,9 +30,27 @@ final class StoreChangeCapture: @unchecked Sendable {
         fileprivate let context: ObjectIdentifier
     }
 
+    /// What a sync service's save said about one object: CloudKit keeps an `NSCKRecordMetadata` row per
+    /// object, and saves it when it imports the object's record or finishes exporting it.
+    struct SyncNote {
+        /// The object's Core Data URI.
+        let object: String
+        /// The object's CloudKit record, from the system fields the row keeps.
+        let recordID: CKRecord.ID?
+        /// Whether the save confirmed the object was exported: it cleared the row's `needsUpload`.
+        let exported: Bool
+        /// Whether an import saved it, so the object's record changed on the server.
+        let imported: Bool
+        let date: Date
+    }
+
     private let lock = NSLock()
     private let storeURL: URL?
     private let ignoredAuthors: Set<String>
+    private let importAuthors: Set<String>
+    private var syncing: [ObjectIdentifier: [(object: NSManagedObject, exported: Bool, imported: Bool)]] = [:]
+    private var syncNotes: [SyncNote] = []
+    private var recordIDs: [String: CKRecord.ID] = [:]
     private var records: [Record] = []
     private var saving: [ObjectIdentifier: [Int: NSManagedObject]] = [:]
     private var nextSequence = 0
@@ -39,10 +58,12 @@ final class StoreChangeCapture: @unchecked Sendable {
     private var _storeIdentifiers: Set<String> = []
     private var _mergePolicy: String?
 
-    /// A capture of saves to the store at `storeURL` by any author but `ignoredAuthors`.
-    init(storeURL: URL?, ignoredAuthors: Set<String>) {
+    /// A capture of saves to the store at `storeURL` by any author but `ignoredAuthors`. Saves by
+    /// `importAuthors` are a sync service's imports.
+    init(storeURL: URL?, ignoredAuthors: Set<String>, importAuthors: Set<String> = []) {
         self.storeURL = storeURL.map(Self.normalized)
         self.ignoredAuthors = ignoredAuthors
+        self.importAuthors = importAuthors
     }
 
     deinit {
@@ -85,6 +106,27 @@ final class StoreChangeCapture: @unchecked Sendable {
         lock.synchronized { records.removeAll { $0.object == object && $0.sequence <= sequence } }
     }
 
+    /// Takes what sync saves have said since the last call, oldest first.
+    func takeSyncNotes() -> [SyncNote] {
+        lock.synchronized {
+            defer { syncNotes = [] }
+            return syncNotes
+        }
+    }
+
+    /// The CloudKit record of an object a sync save has mentioned.
+    func recordID(forObject object: String) -> CKRecord.ID? {
+        lock.synchronized { recordIDs[object] }
+    }
+
+    /// Notes what a sync save said about an object, as the store's own saves do.
+    func noteSync(object: String, recordID: CKRecord.ID?, exported: Bool, imported: Bool, at date: Date = .now) {
+        lock.synchronized {
+            if let recordID { recordIDs[object] = recordID }
+            syncNotes.append(SyncNote(object: object, recordID: recordID, exported: exported, imported: imported, date: date))
+        }
+    }
+
     // MARK: - Saves
 
     private func willSave(_ context: NSManagedObjectContext) {
@@ -98,11 +140,23 @@ final class StoreChangeCapture: @unchecked Sendable {
             // A save that failed never finished its records.
             records.removeAll { $0.context == contextID && !$0.isComplete }
             saving[contextID] = nil
+            syncing[contextID] = nil
         }
+
+        // CloudKit's own rows for the objects it syncs, read once the save has given them their final values.
+        let imported = author.map(importAuthors.contains) ?? false
+        var metadata: [(object: NSManagedObject, exported: Bool, imported: Bool)] = []
+        for object in context.insertedObjects.union(context.updatedObjects) where object.entity.name == Self.metadataEntity {
+            let changed = object.changedValues()
+            let exported = !imported && (changed["needsUpload"] as? NSNumber)?.boolValue == false
+            metadata.append((object, exported, imported))
+        }
+        if !metadata.isEmpty { lock.synchronized { syncing[contextID] = metadata } }
+
         if let author, ignoredAuthors.contains(author) { return }
 
         var made: [(Record, NSManagedObject)] = []
-        for object in context.updatedObjects {
+        for object in context.updatedObjects where !(object.entity.name ?? "").hasPrefix("NSCK") {
             let changed = object.changedValues()
             guard !changed.isEmpty else { continue }
             let keys = Array(changed.keys)
@@ -129,6 +183,11 @@ final class StoreChangeCapture: @unchecked Sendable {
 
     private func didSave(_ context: NSManagedObjectContext) {
         let contextID = ObjectIdentifier(context)
+        let metadata = lock.synchronized { syncing.removeValue(forKey: contextID) } ?? []
+        for (row, exported, imported) in metadata {
+            guard let found = Self.syncedObject(of: row) else { continue }
+            noteSync(object: found.object, recordID: found.recordID, exported: exported, imported: imported)
+        }
         lock.synchronized {
             guard let objects = saving.removeValue(forKey: contextID) else { return }
             for index in records.indices where records[index].context == contextID && !records[index].isComplete {
@@ -140,6 +199,29 @@ final class StoreChangeCapture: @unchecked Sendable {
                 records[index].isComplete = true
             }
         }
+    }
+
+    /// The entity CloudKit keeps its per-object sync state in.
+    static let metadataEntity = "NSCKRecordMetadata"
+
+    /// The object a CloudKit metadata row is for, `x-coredata://<store>/<entity>/p<primary key>`, and its
+    /// record. The entity is the record's type without CloudKit's `CD_` prefix.
+    static func syncedObject(of row: NSManagedObject) -> (object: String, recordID: CKRecord.ID?)? {
+        guard let store = row.objectID.persistentStore?.identifier,
+              let primaryKey = (row.value(forKey: "entityPK") as? NSNumber)?.int64Value,
+              let fields = row.value(forKey: "ckRecordSystemFields") as? Data,
+              let record = decodeSystemFields(fields) else { return nil }
+        var entity = record.recordType
+        if entity.hasPrefix("CD_") { entity.removeFirst(3) }
+        return ("x-coredata://\(store)/\(entity)/p\(primaryKey)", record.recordID)
+    }
+
+    /// A record from the system fields `CKRecord.encodeSystemFields(with:)` wrote.
+    static func decodeSystemFields(_ data: Data) -> CKRecord? {
+        guard let coder = try? NSKeyedUnarchiver(forReadingFrom: data) else { return nil }
+        coder.requiresSecureCoding = true
+        defer { coder.finishDecoding() }
+        return CKRecord(coder: coder)
     }
 
     /// The identifiers of the context's stores that are ours, or `nil` if none is.
@@ -200,6 +282,25 @@ enum SnapshotPatch {
     /// Whether every one of `values` is already what `snapshot` holds.
     static func matches<Snapshot: Codable & Equatable>(_ values: [String: Any], _ snapshot: Snapshot) -> Bool {
         apply(values, to: snapshot, fallback: nil) == snapshot
+    }
+
+    /// The properties among `keys` whose values differ between two snapshots.
+    static func differingKeys<Snapshot: Codable>(_ first: Snapshot, _ second: Snapshot, among keys: [String]) -> [String] {
+        guard !keys.isEmpty, let one = jsonObject(first), let two = jsonObject(second) else { return [] }
+        return keys.filter { key in
+            switch (one[key], two[key]) {
+            case (nil, nil): false
+            case let (a?, b?): !(a as AnyObject).isEqual(b)
+            default: true
+            }
+        }
+    }
+
+    /// `snapshot` with `source`'s values of `keys`.
+    static func copying<Snapshot: Codable>(_ keys: [String], from source: Snapshot, to snapshot: Snapshot) -> Snapshot {
+        guard let object = jsonObject(source) else { return snapshot }
+        let values = Dictionary(uniqueKeysWithValues: keys.map { ($0, object[$0] ?? NSNull()) })
+        return apply(values, to: snapshot, fallback: nil)
     }
 
     private static func jsonObject<Snapshot: Codable>(_ snapshot: Snapshot) -> [String: Any]? {
