@@ -203,3 +203,38 @@ visionOS 1, or Linux.
 ```swift
 .package(url: "https://github.com/JonathanStorey/swift-merging.git", branch: "main")
 ```
+
+# Persistence
+
+A separate library in the same package, independent of `Merging`, that fills in what SwiftData doesn't say
+about CloudKit sync: whether it's running, whether an object has reached the server, and when a change is
+confirmed. It uses public API only. It reads CloudKit's events, the save notifications every Core Data save
+posts, and CloudKit's per-object metadata rows as those saves carry them.
+
+```swift
+import Persistence
+
+// At launch, so no save goes unseen.
+let container = try ModelContainer(for: Note.self)
+let monitor = container.syncMonitor
+
+// In a view: an iCloud symbol and "Up to date", "Uploading", "3 waiting to upload", or the problem.
+SyncIndicator(monitor)
+
+// One object: .unsaved, .pending(since:), .synced(at:), .localOnly or .unknown.
+context.syncStatus(of: note)
+
+// "Sync now", as far as public API goes: save, which starts an upload, then wait for CloudKit to confirm it.
+let result = try await context.saveAndWaitForUpload(timeout: .seconds(30))   // .completed, .timedOut, .failed, .notSyncing
+```
+
+`SyncMonitor` is `@Observable` and shows the activity (idle, setting up, importing, exporting), the last
+import and export, the latest problem (not signed in, storage full, offline, busy), the iCloud account status,
+and how many objects are waiting to upload. `waitForExport(startedAfter:)`, `waitForImport()` and
+`waitForSync()` wait for CloudKit's own events. There's no public way to start an import, so
+`waitForImport` returns when CloudKit next imports, at launch, on returning to the foreground, or on a push.
+
+Each object's state is kept by its Core Data URI in `UserDefaults`, so it survives a relaunch.
+`SyncTracking.start(defaultsSuite:)` picks another suite, such as an App Group's. An object no save or sync has
+touched since tracking started reads `.unknown`, and a store CloudKit hasn't been seen syncing reads
+`.localOnly`.
