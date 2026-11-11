@@ -4,10 +4,10 @@ import MergingSwiftData
 import SwiftData
 import Testing
 
-@available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
 @MainActor
 @Suite struct MergeCoordinatorTests {
     /// Edits the note in the main context, unsaved, and in another context, saved, then merges and saves.
+    @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
     func merge(ours: (Note) -> Void, theirs: (Note) -> Void, policy: MergeConflictPolicy = .keepOurs) throws -> (Fixture, Saved) {
         let fixture = try Fixture()
         let coordinator = try MergeCoordinator(container: fixture.container, types: [Note.self], conflictPolicy: policy)
@@ -19,43 +19,51 @@ import Testing
         return (fixture, try fixture.saved())
     }
 
+    @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
     @Test func bothIncrementsCount() throws {
         let (_, saved) = try merge(ours: { $0.likes += 1 }, theirs: { $0.likes += 2 })
         #expect(saved.likes == 3)
     }
 
+    @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
     @Test func editsToDifferentWordsCombine() throws {
         let (_, saved) = try merge(ours: { $0.body = "the slow brown fox" }, theirs: { $0.body = "the quick brown dog" })
         #expect(saved.body == "the slow brown dog")
     }
 
+    @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
     @Test func keepTheirsTakesTheirTitle() throws {
         let (_, saved) = try merge(ours: { $0.title = "Mine" }, theirs: { $0.title = "Theirs" })
         #expect(saved.title == "Theirs")
     }
 
+    @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
     @Test func insertionsFromBothSidesAreKept() throws {
         let (_, saved) = try merge(ours: { $0.steps.append("cook") }, theirs: { $0.steps.append("serve") })
         #expect(saved.steps == ["prep", "cook", "serve"])
     }
 
+    @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
     @Test func aPropertyOnlyTheyChangedComesThrough() throws {
         let (_, saved) = try merge(ours: { $0.title = "Mine" }, theirs: { $0.likes = 5 })
         #expect(saved.title == "Mine")
         #expect(saved.likes == 5)
     }
 
+    @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
     @Test func aConflictKeepsOursByDefault() throws {
         let (_, saved) = try merge(ours: { $0.body = "the slow brown fox" }, theirs: { $0.body = "the fast brown fox" })
         #expect(saved.body == "the slow brown fox")
     }
 
+    @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
     @Test func aConflictCanKeepTheirs() throws {
         let (_, saved) = try merge(ours: { $0.body = "the slow brown fox" }, theirs: { $0.body = "the fast brown fox" },
                                    policy: .keepTheirs)
         #expect(saved.body == "the fast brown fox")
     }
 
+    @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
     @Test func theMergeLandsInTheMainContextBeforeItSaves() throws {
         let fixture = try Fixture()
         let coordinator = try MergeCoordinator(container: fixture.container, types: [Note.self])
@@ -66,6 +74,7 @@ import Testing
         #expect(fixture.note.hasChanges)
     }
 
+    @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
     @Test func withNoUnsavedEditsTheirsStands() throws {
         let fixture = try Fixture()
         let coordinator = try MergeCoordinator(container: fixture.container, types: [Note.self])
@@ -74,6 +83,7 @@ import Testing
         #expect(try fixture.saved().likes == 7)
     }
 
+    @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
     @Test func mergesAgainAfterASecondRound() throws {
         let fixture = try Fixture()
         let coordinator = try MergeCoordinator(container: fixture.container, types: [Note.self])
@@ -88,6 +98,7 @@ import Testing
     }
 
     /// The silent path: nothing calls the coordinator, and the main context's save merges first.
+    @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
     @Test func enableMergingMergesOnSaveWithNoOtherCalls() throws {
         let fixture = try Fixture()
         try fixture.container.enableMerging(Note.self)
@@ -100,6 +111,7 @@ import Testing
         #expect(saved.body == "the slow brown dog")
     }
 
+    @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
     @Test func aFileLedgerKeepsBasesAcrossCoordinators() throws {
         let fixture = try Fixture()
         let url = FileManager.default.temporaryDirectory.appending(path: "ledger-\(UUID().uuidString).json")
@@ -115,6 +127,7 @@ import Testing
         #expect(fixture.note.likes == 3)
     }
 
+    @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
     @Test func aDeletedObjectLeavesTheLedger() throws {
         let fixture = try Fixture()
         let coordinator = try MergeCoordinator(container: fixture.container, types: [Note.self])

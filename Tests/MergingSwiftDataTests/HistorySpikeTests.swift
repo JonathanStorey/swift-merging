@@ -5,9 +5,9 @@ import Testing
 
 /// What SwiftData itself does, which the merge relies on. A failure here means a design assumption is
 /// wrong, not that the merge has a bug.
-@available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
 @MainActor
 @Suite struct HistorySpikeTests {
+    @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
     @Test func historyRecordsTheAuthorAndOnlyTheChangedAttributes() throws {
         let fixture = try Fixture()
         try fixture.theirEdit { $0.title = "Renamed" }
@@ -26,6 +26,7 @@ import Testing
         #expect(updates[0].updatedAttributes.count == 1)
     }
 
+    @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
     @Test func historyTokensRoundTripThroughCodable() throws {
         let fixture = try Fixture()
         let token = try #require(try ModelContext(fixture.container).fetchHistory(HistoryDescriptor<DefaultHistoryTransaction>()).last?.token)
@@ -33,6 +34,7 @@ import Testing
         #expect(decoded == token)
     }
 
+    @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
     @Test func unsavedEditsSurviveAnotherContextsSave() throws {
         let fixture = try Fixture()
         fixture.note.title = "Mine"
@@ -44,6 +46,7 @@ import Testing
     }
 
     /// Without the merge, a property both sides changed keeps whichever saved last, so one increment is lost.
+    @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
     @Test func withoutMergingTheLastSaveWinsAProperty() throws {
         let fixture = try Fixture()
         fixture.note.likes += 1
@@ -54,6 +57,7 @@ import Testing
     }
 
     /// A property only the other side changed should survive our save of a different property.
+    @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
     @Test func withoutMergingDifferentPropertiesBothSurvive() throws {
         let fixture = try Fixture()
         fixture.note.title = "Mine"
@@ -65,6 +69,7 @@ import Testing
         #expect(saved.color == "blue")
     }
 
+    @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
     @Test func changesMadeDuringWillSaveAreSaved() throws {
         let fixture = try Fixture()
         let main = fixture.container.mainContext
