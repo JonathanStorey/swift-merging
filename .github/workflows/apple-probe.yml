@@ -19,17 +19,13 @@ jobs:
           grep "^CLASS" classes.txt
           echo "==== Methods and ivars that matter ===="
           grep -i -E "import|export|conflict|serverRecord|mergePolicy|merge|author|save|batch|metadata|systemFields|changeTag|recordName|applyAccumulated|recordZoneChanges|fetchChanges|^CLASS" classes.txt | cut -c1-220
-      - name: Disassemble
+      - name: Calls made by the mirroring code
         working-directory: Spikes/Mirroring
         run: |
           set +e
-          lldb --batch -o "breakpoint set -n probeReady" -o "run" -o "command source -e false disassemble.lldb" -o "kill" ./dump > disasm.txt 2>&1
-          wc -l disasm.txt
-          head -20 disasm.txt
-          # Each method's header, then only the calls and strings that answer our questions.
-          grep -E "^(CoreData|libsystem|\S+)\`[-+]\[|objc_msgSend\\\$(save:|setMergePolicy:|setTransactionAuthor:|executeRequest:error:|mergeChangesFromRemoteContextSave|refreshObject|setValue:forKey:|changedValues|committedValues|setAutomaticallyMerges|recordChangeTag|serverRecord|setSavePolicy:|setRecordsToSave|modifyRecords|setPerRecordSaveBlock)|Merge|merge|CKErrorServerRecordChanged|Author|author|import|export|CloudKitMirroring|NSBatch" disasm.txt | cut -c1-200 > interesting.txt
-          wc -l interesting.txt
-          cat interesting.txt
+          lldb --batch -o "breakpoint set -n probeReady" -o "run" -o "command script import calls.py" -o "calls" -o "kill" ./dump > calls.txt 2>&1
+          grep -E "^FUNCTIONS" calls.txt
+          sed -n '/^FUNC /,$p' calls.txt
       - uses: actions/upload-artifact@v4
         with:
           name: mirroring
