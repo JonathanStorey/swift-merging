@@ -38,8 +38,6 @@ public final class MergeCoordinator {
     public let container: ModelContainer
     public let ledger: any MergeLedger
     public let conflictPolicy: MergeConflictPolicy
-    /// What a property without `@Merge` does.
-    public let unmergedProperties: UnmergedPropertyPolicy
     /// The authors whose saves are imports from a sync service.
     public let importAuthors: Set<String>
 
@@ -52,12 +50,10 @@ public final class MergeCoordinator {
     /// store's saves, and with a ledger that has no token yet it reads every object's base from the store.
     public init(container: ModelContainer, types: [any MergeableModel.Type], ledger: (any MergeLedger)? = nil,
                 conflictPolicy: MergeConflictPolicy = .storeDefault,
-                unmergedProperties: UnmergedPropertyPolicy = .followSwiftData,
                 importAuthors: Set<String> = [MergeCoordinator.cloudKitImportAuthor]) throws {
         self.container = container
         self.ledger = ledger ?? InMemoryMergeLedger()
         self.conflictPolicy = conflictPolicy
-        self.unmergedProperties = unmergedProperties
         self.importAuthors = importAuthors
         handlers = types.map { makeHandler(for: $0) }
         capture = StoreChangeCapture(storeURL: container.configurations.first?.url, ignoredAuthors: [Self.localAuthor])
@@ -91,8 +87,7 @@ public final class MergeCoordinator {
         writer.author = Self.localAuthor
         writer.autosaveEnabled = false
         let pass = MergePass(reader: reader, main: container.mainContext, writer: writer, ledger: ledger,
-                             conflictPolicy: conflictPolicy, keepsChanges: unmergedProperties.keepsChanges,
-                             capture: capture, finished: finished)
+                             conflictPolicy: conflictPolicy, capture: capture, finished: finished)
         for transaction in transactions {
             let source: ChangeSource
             if transaction.author == Self.localAuthor {
@@ -231,10 +226,8 @@ extension ModelContainer {
     @discardableResult
     @MainActor
     public func enableMerging(_ types: any MergeableModel.Type..., ledger: (any MergeLedger)? = nil,
-                              conflictPolicy: MergeConflictPolicy = .storeDefault,
-                              unmergedProperties: UnmergedPropertyPolicy = .followSwiftData) throws -> MergeCoordinator {
-        let coordinator = try MergeCoordinator(container: self, types: types, ledger: ledger, conflictPolicy: conflictPolicy,
-                                               unmergedProperties: unmergedProperties)
+                              conflictPolicy: MergeConflictPolicy = .storeDefault) throws -> MergeCoordinator {
+        let coordinator = try MergeCoordinator(container: self, types: types, ledger: ledger, conflictPolicy: conflictPolicy)
         coordinator.startObserving()
         activeCoordinators[ObjectIdentifier(self)] = coordinator
         return coordinator
@@ -276,8 +269,6 @@ final class MergePass {
     let writer: ModelContext
     let ledger: any MergeLedger
     let conflictPolicy: MergeConflictPolicy
-    /// Whether a property without a strategy keeps the side that changed it.
-    let keepsChanges: Bool
     let capture: StoreChangeCapture
     /// The captured saves that finished before the history fetch.
     let finished: Set<Int>
@@ -286,13 +277,12 @@ final class MergePass {
     var updates: [PersistentIdentifier: PassUpdate] = [:]
 
     init(reader: ModelContext, main: ModelContext, writer: ModelContext, ledger: any MergeLedger,
-         conflictPolicy: MergeConflictPolicy, keepsChanges: Bool, capture: StoreChangeCapture, finished: Set<Int>) {
+         conflictPolicy: MergeConflictPolicy, capture: StoreChangeCapture, finished: Set<Int>) {
         self.reader = reader
         self.main = main
         self.writer = writer
         self.ledger = ledger
         self.conflictPolicy = conflictPolicy
-        self.keepsChanges = keepsChanges
         self.capture = capture
         self.finished = finished
     }
@@ -378,8 +368,7 @@ struct ModelHandler<Model: MergeableModel>: ModelMergeHandler {
             if let base = before, let dirty {
                 let ours = dirty.mergeSnapshot
                 let merged = Model.mergeSnapshots(base: base, ours: ours, theirs: theirs,
-                                                  favoring: pass.conflictPolicy.side(whereStoreKeeps: .ours),
-                                                  keepingChanges: pass.keepsChanges)
+                                                  favoring: pass.conflictPolicy.side(whereStoreKeeps: .ours))
                 if merged != ours { dirty.applyMergeSnapshot(merged) }
             }
             // To a sync service, another context's save is this device's own edit.
@@ -391,16 +380,14 @@ struct ModelHandler<Model: MergeableModel>: ModelMergeHandler {
             let saved = before ?? theirs
             let agreed = try decode(pass.ledger.agreedBase(for: id))
             let merged = agreed.map {
-                Model.mergeSnapshots(base: $0, ours: saved, theirs: theirs, favoring: pass.conflictPolicy.side(whereStoreKeeps: .theirs),
-                                     keepingChanges: pass.keepsChanges)
+                Model.mergeSnapshots(base: $0, ours: saved, theirs: theirs, favoring: pass.conflictPolicy.side(whereStoreKeeps: .theirs))
             } ?? theirs
             pass.ledger.setAgreedBase(try JSONEncoder().encode(theirs), for: id)
             if let dirty {
                 // Unsaved edits started from what was saved, and merge onto the merged import.
                 let ours = dirty.mergeSnapshot
                 let final = Model.mergeSnapshots(base: saved, ours: ours, theirs: merged,
-                                                 favoring: pass.conflictPolicy.side(whereStoreKeeps: .ours),
-                                                 keepingChanges: pass.keepsChanges)
+                                                 favoring: pass.conflictPolicy.side(whereStoreKeeps: .ours))
                 if final != ours { dirty.applyMergeSnapshot(final) }
             } else if merged != theirs, let target = try fetch(id, in: pass.writer) {
                 target.applyMergeSnapshot(merged)

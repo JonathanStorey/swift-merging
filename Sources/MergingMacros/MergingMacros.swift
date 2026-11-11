@@ -54,11 +54,10 @@ public struct MergeableModelMacro: ExtensionMacro {
         }
         let keyPaths = properties.map { "\\\(typeName).\($0.name)" }.joined(separator: ", ")
         // Merging is opt-in. A property with `@Merge` merges by its strategy, through `Merged`. One without, or
-        // whose strategy can't settle it, takes `side`, as SwiftData would, or with `keepingChanges` the side
-        // that changed it.
+        // whose strategy can't settle it, takes `side`, as SwiftData would.
         let merges = properties.map { property in
             let name = property.name
-            let fallback = "MergingSwiftData.MergeFallback.value(base: base.\(name), ours: ours.\(name), theirs: theirs.\(name), favoring: side, keepingChanges: keepingChanges)"
+            let fallback = "MergingSwiftData.MergeFallback.value(base: base.\(name), ours: ours.\(name), theirs: theirs.\(name), favoring: side)"
             if let strategy = property.strategy {
                 return "\(name): Merging.Merged(wrappedValue: ours.\(name), \(strategy)).merging(with: theirs.\(name), from: base.\(name)) ?? \(fallback)"
             }
@@ -87,7 +86,7 @@ public struct MergeableModelMacro: ExtensionMacro {
                 [\(keyPaths)]
             }
 
-            \(access)static func mergeSnapshots(base: MergeSnapshot, ours: MergeSnapshot, theirs: MergeSnapshot, favoring side: Merging.MergeSide, keepingChanges: Bool) -> MergeSnapshot {
+            \(access)static func mergeSnapshots(base: MergeSnapshot, ours: MergeSnapshot, theirs: MergeSnapshot, favoring side: Merging.MergeSide) -> MergeSnapshot {
                 MergeSnapshot(
                     \(merges.joined(separator: ",\n            "))
                 )

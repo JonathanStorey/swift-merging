@@ -104,10 +104,9 @@ import Testing
 
     /// A coordinator whose ledger has forgotten the note, so only the store's report can give the base.
     @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
-    func mergeWithoutLedger(ours: (Note) -> Void, theirs: [(Note) -> Void],
-                            unmerged: UnmergedPropertyPolicy = .followSwiftData) throws -> Saved {
+    func mergeWithoutLedger(ours: (Note) -> Void, theirs: [(Note) -> Void]) throws -> Saved {
         let fixture = try Fixture()
-        let coordinator = try MergeCoordinator(container: fixture.container, types: [Note.self], unmergedProperties: unmerged)
+        let coordinator = try MergeCoordinator(container: fixture.container, types: [Note.self])
         coordinator.ledger.setBase(nil, for: fixture.id)
         ours(fixture.note)
         for edit in theirs { try fixture.theirEdit(edit) }
@@ -131,9 +130,9 @@ import Testing
 
     @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
     @Test func theReportedBaseKeepsAPropertyOnlyTheyChanged() throws {
-        let saved = try mergeWithoutLedger(ours: { $0.title = "Mine" }, theirs: [{ $0.color = "blue" }], unmerged: .keepOneSidedChanges)
+        let saved = try mergeWithoutLedger(ours: { $0.title = "Mine" }, theirs: [{ $0.title = "Draft"; $0.likes = 4 }])
         #expect(saved.title == "Mine")
-        #expect(saved.color == "blue")
+        #expect(saved.likes == 4)
     }
 
     @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
@@ -265,9 +264,9 @@ import Testing
     }
 
     @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
-    func importOverAnUnmergedSave(_ unmerged: UnmergedPropertyPolicy) throws -> Saved {
+    func importOverAnUnmergedSave() throws -> Saved {
         let fixture = try Fixture()
-        let coordinator = try MergeCoordinator(container: fixture.container, types: [Note.self], unmergedProperties: unmerged)
+        let coordinator = try MergeCoordinator(container: fixture.container, types: [Note.self])
         fixture.note.color = "green"
         try fixture.container.mainContext.save()
         try coordinator.mergePendingChanges()
@@ -279,17 +278,11 @@ import Testing
 
     @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
     @Test func anImportWinsAPropertyWithNoStrategyAsCloudKitWould() throws {
-        let saved = try importOverAnUnmergedSave(.followSwiftData)
+        let saved = try importOverAnUnmergedSave()
         #expect(saved.color == "red")
         #expect(saved.likes == 2)
     }
 
-    @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
-    @Test func anImportCanKeepThisDevicesChangeToAPropertyWithNoStrategy() throws {
-        let saved = try importOverAnUnmergedSave(.keepOneSidedChanges)
-        #expect(saved.color == "green")
-        #expect(saved.likes == 2)
-    }
 
     // MARK: - When a strategy can't settle a clash
 

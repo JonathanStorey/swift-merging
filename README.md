@@ -229,8 +229,7 @@ would, and only a `@Merge` strategy merges three ways, from the base, ours and t
 A property without `@Merge`, or whose strategy can't combine two changes, takes the conflict policy's side.
 The default, `.storeDefault`, keeps what SwiftData would without merging: the main context's save over
 another context's, and a CloudKit import over this device's earlier save, which is CloudKit's server wins.
-`.keepOurs` and `.keepTheirs` choose a side instead, and `unmergedProperties: .keepOneSidedChanges` keeps a
-change only one side made even without `@Merge`.
+`.keepOurs` and `.keepTheirs` choose a side instead.
 
 ## Requirements
 
