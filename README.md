@@ -231,6 +231,19 @@ The default, `.storeDefault`, keeps what SwiftData would without merging: the ma
 another context's, and a CloudKit import over this device's earlier save, which is CloudKit's server wins.
 `.keepOurs` and `.keepTheirs` choose a side instead.
 
+### CloudKit
+
+CloudKit already merges attribute by attribute, with one gap: when both devices change the same attribute,
+its importer keeps the value of the device that hasn't exported yet and drops the other's, so the two never
+meet in the store. For a `@Merge` attribute that would lose one side's change, so the merge reads the
+other device's value from CloudKit's private database and merges the two, writing the result as this
+device's own edit for the next export. It only asks for records CloudKit itself has mentioned, so a store
+that doesn't sync never calls CloudKit. Exports are confirmed object by object from CloudKit's own sync
+metadata, which tells the merge exactly what the other device has seen.
+
+These safeguards rely on CloudKit's private classes and fields, so the tests include canaries that fail if
+Apple moves them.
+
 ## Requirements
 
 Swift 6.1 (Xcode 16.3) or later. iOS 17, macOS 14, tvOS 17, watchOS 10 and
