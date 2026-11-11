@@ -1,0 +1,10 @@
+// Set these to your own before running the CloudKit stages. The local stages run without them.
+//
+// SYNCLAB_TEAM: your Apple developer team ID, as shown in Xcode's Signing & Capabilities.
+// SYNCLAB_BUNDLE_ID: a bundle identifier your team owns.
+// SYNCLAB_CLOUDKIT_CONTAINER: a CloudKit container your team owns, starting with "iCloud.". Use one only for
+// testing: the lab writes and deletes test items there.
+
+SYNCLAB_TEAM =
+SYNCLAB_BUNDLE_ID = com.example.SyncLab
+SYNCLAB_CLOUDKIT_CONTAINER = iCloud.com.example.SyncLab

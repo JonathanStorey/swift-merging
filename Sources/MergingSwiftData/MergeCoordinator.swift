@@ -578,9 +578,17 @@ struct ModelHandler<Model: MergeableModel>: ModelMergeHandler {
     }
 
     /// Whether an update changed a merged property. An update that names none is taken to change them all.
+    /// A change to part of a `Codable` property, which SwiftData stores as a composite attribute, can name
+    /// that part's own key path, such as `\Sheet.layout.size.width`, so a key path that extends a merged
+    /// one counts too, as does one whose name can't be read.
     private func touchesMergedProperty(_ update: DefaultHistoryUpdate<Model>) -> Bool {
         let merged = Set(Model.mergeKeyPaths)
-        return update.updatedAttributes.isEmpty || update.updatedAttributes.contains { merged.contains($0) }
+        let names = merged.map { String(describing: $0) }
+        return update.updatedAttributes.isEmpty || update.updatedAttributes.contains { keyPath in
+            if merged.contains(keyPath) { return true }
+            let name = String(describing: keyPath)
+            return !name.hasPrefix("\\") || names.contains { name.hasPrefix($0 + ".") }
+        }
     }
 
     /// The object in `context`, or `nil` if it's since been deleted.
