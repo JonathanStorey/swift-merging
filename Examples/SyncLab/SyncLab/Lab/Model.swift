@@ -1,0 +1,58 @@
+import Foundation
+import MergingSwiftData
+import SwiftData
+
+/// A Codable value with a bit of everything SwiftData stores in its own way: a nested struct, an enum, a
+/// dictionary, an array of structs, and an optional.
+struct Spec: Codable, Equatable, Sendable {
+    struct Size: Codable, Equatable, Sendable {
+        var width = 1.0
+        var height = 1.0
+    }
+
+    struct Point: Codable, Equatable, Sendable {
+        var x = 0
+        var y = 0
+    }
+
+    enum Shape: String, Codable, Sendable {
+        case circle, square, star
+    }
+
+    var size = Size()
+    var shape = Shape.circle
+    var options: [String: Int] = [:]
+    var points: [Point] = []
+    var caption: String? = nil
+}
+
+/// The object every test edits. Each kind of data the lab checks has its own property, and every property
+/// has a default, as CloudKit requires.
+@Model @MergeableModel
+final class Item {
+    /// Finds the same item in every store, since each store gives it its own identifier.
+    var key: String = ""
+    @Merge(.byWord) var title: String = ""
+    @Merge(.byElement) var steps: [String] = []
+    @Merge(.byNode) var spec: Spec = Spec()
+    @Merge(.byMembership) @Relationship(deleteRule: .nullify, inverse: \Label.items) var labels: [Label]? = []
+    @Merge(.keep(.theirs)) @Attribute(.externalStorage) var blob: Data? = nil
+
+    init(key: String) {
+        self.key = key
+    }
+}
+
+@Model
+final class Label {
+    var name: String = ""
+    var items: [Item]? = []
+
+    init(name: String) {
+        self.name = name
+    }
+}
+
+enum LabSchema {
+    static var schema: Schema { Schema([Item.self, Label.self]) }
+}

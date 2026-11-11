@@ -27,3 +27,39 @@ jobs:
       - uses: actions/checkout@v5
       - name: Build and test
         run: swift test
+
+  sync-lab:
+    runs-on: macos-15
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v5
+      - name: Pick an iPhone simulator
+        run: |
+          UDID=$(xcrun simctl list devices available -j | python3 -c '
+          import json, re, sys
+          best = None
+          for runtime, devices in json.load(sys.stdin)["devices"].items():
+              match = re.search(r"iOS-(\d+)-(\d+)", runtime)
+              if not match or int(match.group(1)) < 18:
+                  continue
+              version = (int(match.group(1)), int(match.group(2)))
+              for device in devices:
+                  if device["name"].startswith("iPhone") and (best is None or version > best[0]):
+                      best = (version, device["udid"], device["name"])
+          print(best[1])
+          print(best, file=sys.stderr)
+          ')
+          echo "UDID=$UDID" >> "$GITHUB_ENV"
+      - name: Build SyncLab
+        run: |
+          xcodebuild build -project Examples/SyncLab/SyncLab.xcodeproj -scheme SyncLab \
+            -destination "id=$UDID" -derivedDataPath build \
+            -skipMacroValidation -skipPackagePluginValidation CODE_SIGNING_ALLOWED=NO -quiet
+      - name: Run the stages that need no CloudKit
+        timeout-minutes: 15
+        run: |
+          xcrun simctl boot "$UDID" || true
+          xcrun simctl bootstatus "$UDID" -b
+          xcrun simctl install "$UDID" build/Build/Products/Debug-iphonesimulator/SyncLab.app
+          xcrun simctl launch --console-pty "$UDID" com.example.SyncLab -autorun local | tee synclab.log
+          grep -q "SYNCLAB DONE .*failed=0" synclab.log

@@ -244,6 +244,11 @@ metadata, which tells the merge exactly what the other device has seen.
 These safeguards rely on CloudKit's private classes and fields, so the tests include canaries that fail if
 Apple moves them.
 
+### Sync Lab
+
+[Examples/SyncLab](Examples/SyncLab) is an iOS app that runs these merges end to end, from plain snapshot
+merges to three stores syncing through one CloudKit container, and checks off each test as it passes.
+
 ## Requirements
 
 Swift 6.1 (Xcode 16.3) or later. iOS 17, macOS 14, tvOS 17, watchOS 10 and
