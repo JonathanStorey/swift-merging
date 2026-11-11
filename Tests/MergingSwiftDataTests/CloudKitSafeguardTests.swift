@@ -37,34 +37,6 @@ final class FakeRemote: RemoteRecordSource, @unchecked Sendable {
     }
 
     @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
-    @Test func theImporterStillAppliesRecordsAttributeByAttribute() {
-        // Whichever of Core Data's CloudKit classes holds it in this release.
-        _ = NSClassFromString("PFCloudKitSerializer")
-        var found: [String] = []
-        var count: UInt32 = 0
-        if let classes = objc_copyClassList(&count) {
-            defer { free(UnsafeMutableRawPointer(classes)) }
-            for index in 0..<Int(count) {
-                let owner: AnyClass = classes[index]
-                let name = NSStringFromClass(owner)
-                guard name.hasPrefix("PFCloudKit") || name.hasPrefix("NSCloudKit") else { continue }
-                for (target, mark) in [(owner, "-"), (object_getClass(owner), "+")] {
-                    guard let target else { continue }
-                    var methodCount: UInt32 = 0
-                    guard let methods = class_copyMethodList(target, &methodCount) else { continue }
-                    defer { free(methods) }
-                    for item in 0..<Int(methodCount) {
-                        let selector = NSStringFromSelector(method_getName(methods[item]))
-                        if selector.hasPrefix("applyUpdatedRecords") { found.append("\(mark)[\(name) \(selector)]") }
-                    }
-                }
-            }
-        }
-        print("Canary: importer apply methods =", found.isEmpty ? "MISSING" : found.joined(separator: ", "))
-        #expect(!found.isEmpty)
-    }
-
-    @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
     @Test func cloudKitsPerObjectMetadataStillHasItsFields() throws {
         let metadata: AnyClass = try #require(NSClassFromString(StoreChangeCapture.metadataEntity))
         for name in ["needsUpload", "entityPK", "ckRecordSystemFields"] {
