@@ -23,6 +23,7 @@ final class FakeRemote: RemoteRecordSource, @unchecked Sendable {
     }
 }
 
+@available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
 @MainActor
 @Suite struct CloudKitSafeguardTests {
     // MARK: - Canaries: a failure here means CloudKit's internals moved and a safeguard needs another look
@@ -65,6 +66,7 @@ final class FakeRemote: RemoteRecordSource, @unchecked Sendable {
     // MARK: - CloudKit's own saves, simulated with a store of its metadata rows
 
     /// A store with CloudKit's metadata entity, as the capture sees it.
+    @MainActor
     struct MetadataStore {
         let context: NSManagedObjectContext
         let entity: NSEntityDescription
