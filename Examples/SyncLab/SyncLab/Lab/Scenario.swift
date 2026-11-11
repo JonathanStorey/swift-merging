@@ -1,4 +1,5 @@
 import Foundation
+import MergingSwiftData
 import SwiftData
 
 /// The kinds of data the lab syncs, one test each per stage.
