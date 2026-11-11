@@ -56,17 +56,18 @@ import Testing
         #expect(try fixture.saved().likes == 1)
     }
 
-    /// A property only the other side changed should survive our save of a different property.
+    /// Found by this spike: a save writes the whole object, so without the merge even a property only the
+    /// other side changed goes back to what the main context last read. The snapshot has to list every
+    /// stored property for that reason.
     @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
-    @Test func withoutMergingDifferentPropertiesBothSurvive() throws {
+    @Test func withoutMergingOurSaveRevertsAPropertyOnlyTheyChanged() throws {
         let fixture = try Fixture()
         fixture.note.title = "Mine"
         try fixture.theirEdit { $0.color = "blue" }
         try fixture.container.mainContext.save()
         let saved = try fixture.saved()
-        print("Spike: after disjoint edits, saved =", saved)
         #expect(saved.title == "Mine")
-        #expect(saved.color == "blue")
+        #expect(saved.color == "red")
     }
 
     @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)

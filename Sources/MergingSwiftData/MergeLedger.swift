@@ -43,7 +43,9 @@ public final class InMemoryMergeLedger: MergeLedger {
 public final class FileMergeLedger: MergeLedger {
     private struct Contents: Codable {
         var token: DefaultHistoryToken?
-        var bases: [PersistentIdentifier: Data] = [:]
+        // Keyed by the identifier's encoded form: a decoded `PersistentIdentifier` doesn't hash like the
+        // one it was encoded from.
+        var bases: [String: Data] = [:]
     }
 
     private let url: URL
@@ -64,9 +66,15 @@ public final class FileMergeLedger: MergeLedger {
         set { contents.token = newValue }
     }
 
-    public func base(for id: PersistentIdentifier) -> Data? { contents.bases[id] }
+    public func base(for id: PersistentIdentifier) -> Data? { contents.bases[key(id)] }
 
-    public func setBase(_ base: Data?, for id: PersistentIdentifier) { contents.bases[id] = base }
+    public func setBase(_ base: Data?, for id: PersistentIdentifier) { contents.bases[key(id)] = base }
+
+    private func key(_ id: PersistentIdentifier) -> String {
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = .sortedKeys
+        return (try? encoder.encode(id)).map { String(decoding: $0, as: UTF8.self) } ?? "\(id)"
+    }
 
     public func save() throws {
         try JSONEncoder().encode(contents).write(to: url, options: .atomic)

@@ -51,6 +51,20 @@ import Testing
     }
 
     @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
+    @Test func aPropertyWithNoStrategyKeepsTheSideThatChangedIt() throws {
+        let (_, saved) = try merge(ours: { $0.title = "Mine" }, theirs: { $0.color = "blue" })
+        #expect(saved.title == "Mine")
+        #expect(saved.color == "blue")
+    }
+
+    @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
+    @Test func aConflictOnOnePropertyLeavesTheOtherMerges() throws {
+        let (_, saved) = try merge(ours: { $0.color = "green"; $0.likes += 1 }, theirs: { $0.color = "blue"; $0.likes += 2 })
+        #expect(saved.color == "green")
+        #expect(saved.likes == 3)
+    }
+
+    @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
     @Test func aConflictKeepsOursByDefault() throws {
         let (_, saved) = try merge(ours: { $0.body = "the slow brown fox" }, theirs: { $0.body = "the fast brown fox" })
         #expect(saved.body == "the slow brown fox")

@@ -9,6 +9,9 @@ import SwiftData
 /// each property's strategy exactly as it does for any other value. A property only one side changed keeps
 /// that side, and the strategy decides only when both changed it.
 ///
+/// List every stored property in the snapshot, with or without `@Merged`. A SwiftData save writes the whole
+/// object, so a property the snapshot leaves out loses the other side's change when the main context saves.
+///
 /// ```swift
 /// @Model final class Note {
 ///     var title = ""
@@ -47,7 +50,8 @@ public protocol MergeableModel: PersistentModel {
     static var mergeKeyPaths: [PartialKeyPath<Self>] { get }
 }
 
-/// What a merge does when both sides changed a property and its strategy can't combine them.
+/// What a merge does when both sides changed a property and its strategy can't combine them. Only that
+/// property takes the side: every other property still merges.
 public enum MergeConflictPolicy: Sendable {
     /// Keeps this device's unsaved edits.
     case keepOurs

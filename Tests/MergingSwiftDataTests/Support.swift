@@ -21,13 +21,15 @@ import Testing
     }
 }
 
-// What `@Merge(.strategy)` on Note's own properties will generate. `color` isn't merged.
+// What `@Merge(.strategy)` on Note's own properties will generate. `color` has no strategy, so it keeps
+// the side that changed it.
 extension Note: MergeableModel {
     struct MergeSnapshot: Codable, Equatable, Mergeable {
         @Merged(.keep(.theirs)) var title = ""
         @Merged(.byWord) var body = ""
         @Merged(.sum) var likes = 0
         var steps: [String] = []
+        var color = ""
     }
 
     var mergeSnapshot: MergeSnapshot {
@@ -36,6 +38,7 @@ extension Note: MergeableModel {
         snapshot.body = body
         snapshot.likes = likes
         snapshot.steps = steps
+        snapshot.color = color
         return snapshot
     }
 
@@ -44,9 +47,10 @@ extension Note: MergeableModel {
         if body != snapshot.body { body = snapshot.body }
         if likes != snapshot.likes { likes = snapshot.likes }
         if steps != snapshot.steps { steps = snapshot.steps }
+        if color != snapshot.color { color = snapshot.color }
     }
 
-    static var mergeKeyPaths: [PartialKeyPath<Note>] { [\.title, \.body, \.likes, \.steps] }
+    static var mergeKeyPaths: [PartialKeyPath<Note>] { [\.title, \.body, \.likes, \.steps, \.color] }
 }
 
 /// A note's values, read while its context is alive.
