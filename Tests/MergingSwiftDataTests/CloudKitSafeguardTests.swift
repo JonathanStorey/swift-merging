@@ -42,10 +42,13 @@ final class FakeRemote: RemoteRecordSource, @unchecked Sendable {
         var names: [String] = []
         for target in [serializer, object_getClass(serializer)].compactMap({ $0 }) {
             var count: UInt32 = 0
-            guard let methods = class_copyMethodList(target, &count) else { continue }
+            let methods = class_copyMethodList(target, &count)
+            print("Canary: serializer", target === serializer ? "instance" : "class", "methods:", count)
+            guard let methods else { continue }
             defer { free(methods) }
             for index in 0..<Int(count) {
                 let name = NSStringFromSelector(method_getName(methods[index]))
+                if name.contains("Record") { print("Canary: serializer has", target === serializer ? "-" : "+", name) }
                 if name.hasPrefix("applyUpdatedRecords") { names.append((target === serializer ? "-" : "+") + name) }
             }
         }
