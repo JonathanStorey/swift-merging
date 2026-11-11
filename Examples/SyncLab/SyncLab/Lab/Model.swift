@@ -35,7 +35,7 @@ final class Item {
     @Merge(.byWord) var title: String = ""
     @Merge(.byElement) var steps: [String] = []
     @Merge(.byNode) var spec: Spec = Spec()
-    @Merge(.byMembership) @Relationship(deleteRule: .nullify, inverse: \Label.items) var labels: [Label]? = []
+    @Merge(.byMembership) @Relationship(deleteRule: .nullify, inverse: \Tag.items) var labels: [Tag]? = []
     @Merge(.keep(.theirs)) @Attribute(.externalStorage) var blob: Data? = nil
 
     init(key: String) {
@@ -44,7 +44,7 @@ final class Item {
 }
 
 @Model
-final class Label {
+final class Tag {
     var name: String = ""
     var items: [Item]? = []
 
@@ -54,5 +54,5 @@ final class Label {
 }
 
 enum LabSchema {
-    static var schema: Schema { Schema([Item.self, Label.self]) }
+    static var schema: Schema { Schema([Item.self, Tag.self]) }
 }

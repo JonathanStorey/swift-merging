@@ -225,7 +225,7 @@ final class CloudLab {
             let main = try a.mainContext()
             try await Task.sleep(for: .seconds(5))
             for item in try main.fetch(FetchDescriptor<Item>()) { main.delete(item) }
-            for label in try main.fetch(FetchDescriptor<Label>()) { main.delete(label) }
+            for label in try main.fetch(FetchDescriptor<Tag>()) { main.delete(label) }
             let saved = Date.now
             try main.save()
             let clock = ContinuousClock()

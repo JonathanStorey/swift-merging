@@ -60,7 +60,7 @@ enum DataKind: String, CaseIterable, Identifiable, Sendable {
             Scenario.edit(&spec, by: editor)
             item.spec = spec
         case .relationship:
-            let label = Label(name: "editor-\(editor)")
+            let label = Tag(name: "editor-\(editor)")
             context.insert(label)
             item.labels = (item.labels ?? []) + [label]
         case .blob:
@@ -169,7 +169,7 @@ enum Scenario {
         item.steps = baseSteps
         item.spec = baseSpec
         item.blob = baseBlob
-        let label = Label(name: baseLabel)
+        let label = Tag(name: baseLabel)
         context.insert(label)
         item.labels = [label]
     }

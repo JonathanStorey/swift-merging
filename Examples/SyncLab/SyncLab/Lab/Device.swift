@@ -8,14 +8,14 @@ import SwiftData
 /// CloudKit container and zone.
 @MainActor @Observable
 final class Device: Identifiable {
-    static let names = ["A", "B", "C"]
+    nonisolated static let names = ["A", "B", "C"]
 
     enum Connection: Equatable {
         case closed, offline, online
     }
 
     let name: String
-    var id: String { name }
+    nonisolated var id: String { name }
     private(set) var connection = Connection.closed
     /// The store's identifier, which CloudKit's events name.
     private(set) var storeIdentifier: String?
