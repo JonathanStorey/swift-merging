@@ -39,10 +39,18 @@ final class FakeRemote: RemoteRecordSource, @unchecked Sendable {
     @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
     @Test func theImporterStillAppliesRecordsAttributeByAttribute() throws {
         let serializer: AnyClass = try #require(NSClassFromString("PFCloudKitSerializer"))
-        let selector = NSSelectorFromString("applyUpdatedRecords:deletedRecordIDs:toStore:inManagedObjectContext:onlyUpdatingAttributes:andRelationships:madeChanges:error:")
-        let found = class_getClassMethod(serializer, selector) != nil || class_getInstanceMethod(serializer, selector) != nil
-        print("Canary: serializer apply method", found ? "found" : "MISSING")
-        #expect(found)
+        var names: [String] = []
+        for target in [serializer, object_getClass(serializer)].compactMap({ $0 }) {
+            var count: UInt32 = 0
+            guard let methods = class_copyMethodList(target, &count) else { continue }
+            defer { free(methods) }
+            for index in 0..<Int(count) {
+                let name = NSStringFromSelector(method_getName(methods[index]))
+                if name.hasPrefix("applyUpdatedRecords") { names.append((target === serializer ? "-" : "+") + name) }
+            }
+        }
+        print("Canary: serializer apply methods =", names.isEmpty ? "MISSING" : names.joined(separator: ", "))
+        #expect(!names.isEmpty)
     }
 
     @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
@@ -56,13 +64,20 @@ final class FakeRemote: RemoteRecordSource, @unchecked Sendable {
     }
 
     @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
-    @Test func cloudKitsContextNamesAreReadFromCoreData() {
-        let importName = CloudKitNames.exported("NSCloudKitMirroringDelegateImportContextName")
-        let exportName = CloudKitNames.exported("NSCloudKitMirroringDelegateExportContextName")
-        print("Canary: import context name =", importName ?? "MISSING")
-        print("Canary: export context name =", exportName ?? "MISSING")
-        #expect(importName != nil)
-        #expect(exportName != nil)
+    @Test func cloudKitStillNamesItsContextsAsWeDo() throws {
+        print("Canary: import context name exported =", CloudKitNames.exported("NSCloudKitMirroringDelegateImportContextName") ?? "no")
+        // CloudKit's own check for its contexts' names, which its history analyzer uses to skip their saves.
+        let analyzer: AnyClass = try #require(NSClassFromString("PFCloudKitHistoryAnalyzer"))
+        let selector = NSSelectorFromString("isPrivateContextName:")
+        let method = try #require(class_getClassMethod(analyzer, selector))
+        typealias Check = @convention(c) (AnyClass, Selector, NSString) -> Bool
+        let isPrivate = unsafeBitCast(method_getImplementation(method), to: Check.self)
+        for name in [CloudKitNames.importAuthor, CloudKitNames.exportAuthor] {
+            let known = isPrivate(analyzer, selector, name as NSString)
+            print("Canary: CloudKit recognizes context name", name, known ? "yes" : "NO")
+            #expect(known, "CloudKit no longer calls a context \(name)")
+        }
+        #expect(!isPrivate(analyzer, selector, MergeCoordinator.localAuthor as NSString))
         #expect(MergeCoordinator.cloudKitImportAuthor == CloudKitNames.importAuthor)
     }
 
