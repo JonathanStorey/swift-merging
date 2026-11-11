@@ -19,6 +19,8 @@ jobs:
           echo "Schemes: $SCHEMES"
           SCHEME=$(echo "$SCHEMES" | grep -x -m1 -e Merging -e swift-merging-Package -e swift-merging || echo "$SCHEMES" | head -1)
           xcodebuild build -scheme "$SCHEME" -destination 'generic/platform=iOS Simulator' -quiet
+      - name: Build Persistence for iOS
+        run: xcodebuild build -scheme Persistence -destination 'generic/platform=iOS Simulator' -quiet
 
   linux:
     runs-on: ubuntu-latest
