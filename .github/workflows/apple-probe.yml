@@ -1,0 +1,48 @@
+name: Apple probe
+on:
+  push:
+    branches: [spike/apple-probe]
+jobs:
+  probe:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v5
+      - name: Versions
+        run: xcodebuild -version && swift --version && sw_vers
+      - name: Collect interfaces
+        run: |
+          SDK=$(xcrun --show-sdk-path)
+          mkdir -p out
+          find "$SDK/System/Library/Frameworks/SwiftData.framework" -name "*.swiftinterface" | head -5
+          cp "$(find "$SDK/System/Library/Frameworks/SwiftData.framework" -name 'arm64e-apple-macos.swiftinterface' | head -1)" out/SwiftData.swiftinterface || true
+          cp "$(find "$SDK/System/Library/Frameworks/CoreData.framework" -name 'arm64e-apple-macos.swiftinterface' | head -1)" out/CoreData.swiftinterface || true
+          cp -R "$SDK/System/Library/Frameworks/CoreData.framework/Headers" out/CoreDataHeaders || true
+          ls "$SDK/System/Library/Frameworks" | grep -i -E "data|cloud" > out/frameworks.txt
+          ls "$SDK/System/Library/PrivateFrameworks" 2>/dev/null | grep -i -E "data|cloud" > out/private-frameworks.txt || true
+          wc -l out/*.swiftinterface
+      - name: Run probe
+        working-directory: Spikes/AppleProbe
+        run: swift run -c debug AppleProbe 2>&1 | tee ../../out/probe.txt
+      - name: Runtime classes
+        run: |
+          cat > classes.swift <<'SWIFT'
+          import Foundation
+          import SwiftData
+          import CoreData
+          var count: UInt32 = 0
+          let image = Bundle(for: NSManagedObjectContext.self).executablePath!
+          _ = ModelContainer.self
+          for path in [image, "/System/Library/Frameworks/SwiftData.framework/Versions/A/SwiftData", "/System/Library/Frameworks/SwiftData.framework/SwiftData"] {
+              guard let names = objc_copyClassNamesForImage(path, &count) else { print("no image", path); continue }
+              print("IMAGE", path, count)
+              for i in 0..<Int(count) {
+                  let name = String(cString: names[i])
+                  if name.contains("CloudKit") || name.contains("Mirror") || name.contains("Merge") || name.contains("History") || name.contains("SwiftData") { print(name) }
+              }
+          }
+          SWIFT
+          swiftc classes.swift -o classes && ./classes | tee out/classes.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: apple-probe
+          path: out
