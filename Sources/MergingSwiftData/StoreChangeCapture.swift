@@ -93,7 +93,8 @@ final class StoreChangeCapture: @unchecked Sendable {
         let author = context.transactionAuthor
         lock.synchronized {
             _storeIdentifiers.formUnion(stores)
-            _mergePolicy = "\(context.mergePolicy)"
+            let policy = context.mergePolicy as? NSMergePolicy
+            _mergePolicy = "\(context.mergePolicy) type=\(policy.map { "\($0.mergeType.rawValue)" } ?? "?")"
             // A save that failed never finished its records.
             records.removeAll { $0.context == contextID && !$0.isComplete }
             saving[contextID] = nil

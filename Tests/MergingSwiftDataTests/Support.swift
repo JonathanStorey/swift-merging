@@ -42,7 +42,7 @@ struct Saved: Equatable {
     var title: String
     var body: String
     var likes: Int
-    @Merge(.byElement) var steps: [String]
+    var steps: [String]
     var color: String
     var photo: Data?
     var tags: Set<String>
