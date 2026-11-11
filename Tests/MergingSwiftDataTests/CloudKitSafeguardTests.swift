@@ -23,11 +23,11 @@ final class FakeRemote: RemoteRecordSource, @unchecked Sendable {
     }
 }
 
-@available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
 @MainActor
 @Suite struct CloudKitSafeguardTests {
     // MARK: - Canaries: a failure here means CloudKit's internals moved and a safeguard needs another look
 
+    @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
     @Test func cloudKitsMirroringClassesAreStillThere() {
         for name in ["NSCloudKitMirroringDelegate", "PFCloudKitImportRecordsWorkItem", "PFCloudKitSerializer", "NSCKRecordMetadata"] {
             let found = NSClassFromString(name) != nil
@@ -36,6 +36,7 @@ final class FakeRemote: RemoteRecordSource, @unchecked Sendable {
         }
     }
 
+    @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
     @Test func theImporterStillAppliesRecordsAttributeByAttribute() throws {
         let serializer: AnyClass = try #require(NSClassFromString("PFCloudKitSerializer"))
         let selector = NSSelectorFromString("applyUpdatedRecords:deletedRecordIDs:toStore:inManagedObjectContext:onlyUpdatingAttributes:andRelationships:madeChanges:error:")
@@ -44,6 +45,7 @@ final class FakeRemote: RemoteRecordSource, @unchecked Sendable {
         #expect(found)
     }
 
+    @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
     @Test func cloudKitsPerObjectMetadataStillHasItsFields() throws {
         let metadata: AnyClass = try #require(NSClassFromString(StoreChangeCapture.metadataEntity))
         for name in ["needsUpload", "entityPK", "ckRecordSystemFields"] {
@@ -53,6 +55,7 @@ final class FakeRemote: RemoteRecordSource, @unchecked Sendable {
         }
     }
 
+    @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
     @Test func cloudKitsContextNamesAreReadFromCoreData() {
         let importName = CloudKitNames.exported("NSCloudKitMirroringDelegateImportContextName")
         let exportName = CloudKitNames.exported("NSCloudKitMirroringDelegateExportContextName")
@@ -66,6 +69,7 @@ final class FakeRemote: RemoteRecordSource, @unchecked Sendable {
     // MARK: - CloudKit's own saves, simulated with a store of its metadata rows
 
     /// A store with CloudKit's metadata entity, as the capture sees it.
+    @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
     @MainActor
     struct MetadataStore {
         let context: NSManagedObjectContext
@@ -123,6 +127,7 @@ final class FakeRemote: RemoteRecordSource, @unchecked Sendable {
         }
     }
 
+    @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
     @Test func aFinishedExportConfirmsTheObjectItSent() throws {
         let store = try MetadataStore()
         let row = try store.insertRow(primaryKey: 7, recordName: "note-7")
@@ -144,6 +149,7 @@ final class FakeRemote: RemoteRecordSource, @unchecked Sendable {
         #expect(store.capture.recordID(forObject: note.object)?.recordName == "note-7")
     }
 
+    @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
     @Test func anImportNotesTheObjectWhoseRecordChanged() throws {
         let store = try MetadataStore()
         let row = try store.insertRow(primaryKey: 3, recordName: nil)
