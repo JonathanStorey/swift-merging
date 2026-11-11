@@ -64,3 +64,25 @@ jobs:
           xcrun simctl install "$UDID" build/Build/Products/Debug-iphonesimulator/SyncLab.app
           xcrun simctl launch --console-pty "$UDID" com.example.SyncLab -autorun local | tee synclab.log
           grep -q "SYNCLAB DONE .*failed=0" synclab.log
+
+  swiftdata-probes:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v5
+      - name: Build the tests
+        run: swift build --build-tests
+      - name: Run each probe in its own process
+        run: |
+          for step in plain history merging; do
+            for shape in Plain Optional Enum TopOptional TopEnum; do
+              name="${step}${shape}"
+              grep -q "func ${name}()" Tests/MergingSwiftDataTests/SwiftDataProbes.swift || continue
+              if SWIFTDATA_PROBES=1 swift test --skip-build --filter "SwiftDataProbes/${name}\(" > probe.log 2>&1; then
+                result=survived
+              else
+                result=CRASHED
+              fi
+              echo "PROBE RESULT ${name}: ${result}"
+              grep -E "PROBE |Fatal error" probe.log | sed 's/^/    /'
+            done
+          done
