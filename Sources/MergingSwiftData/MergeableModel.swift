@@ -49,14 +49,17 @@ public protocol MergeableModel: PersistentModel {
     /// The merged properties, so a change to anything else is left alone.
     static var mergeKeyPaths: [PartialKeyPath<Self>] { get }
 
-    /// Merges two edits of a snapshot property by property. A property both sides changed and its strategy
-    /// can't combine takes `side`, and every other property still merges.
-    static func mergeSnapshots(base: MergeSnapshot, ours: MergeSnapshot, theirs: MergeSnapshot, favoring side: MergeSide) -> MergeSnapshot
+    /// Merges two edits of a snapshot property by property. A property with no strategy, or whose strategy
+    /// can't combine the two, takes `side`, or with `keepingChanges` the side that changed it, and every
+    /// other property still merges.
+    static func mergeSnapshots(base: MergeSnapshot, ours: MergeSnapshot, theirs: MergeSnapshot, favoring side: MergeSide,
+                               keepingChanges: Bool) -> MergeSnapshot
 }
 
 extension MergeableModel where MergeSnapshot: Mergeable {
     /// A `Mergeable` snapshot merges node by node, by its `@Merged` strategies.
-    public static func mergeSnapshots(base: MergeSnapshot, ours: MergeSnapshot, theirs: MergeSnapshot, favoring side: MergeSide) -> MergeSnapshot {
+    public static func mergeSnapshots(base: MergeSnapshot, ours: MergeSnapshot, theirs: MergeSnapshot, favoring side: MergeSide,
+                                      keepingChanges: Bool) -> MergeSnapshot {
         switch side {
         case .ours: CodableTotalMerge<MergeSnapshot, OursSide>().merge(base: base, ours: ours, theirs: theirs) ?? ours
         case .theirs: CodableTotalMerge<MergeSnapshot, TheirsSide>().merge(base: base, ours: ours, theirs: theirs) ?? theirs
@@ -64,14 +67,30 @@ extension MergeableModel where MergeSnapshot: Mergeable {
     }
 }
 
-/// What a property without a strategy merges to, or one whose strategy couldn't merge: the side that changed
-/// it, and `side` if both did.
+/// What a property without a strategy merges to, or one whose strategy couldn't merge: `side`, as SwiftData
+/// would keep it, or with `keepingChanges` the side that changed it, and `side` only if both did.
 public enum MergeFallback {
-    public static func value<Value: Equatable>(base: Value, ours: Value, theirs: Value, favoring side: MergeSide) -> Value {
-        if ours == base { return theirs }
-        if theirs == base || ours == theirs { return ours }
+    public static func value<Value: Equatable>(base: Value, ours: Value, theirs: Value, favoring side: MergeSide,
+                                               keepingChanges: Bool) -> Value {
+        if keepingChanges {
+            if ours == base { return theirs }
+            if theirs == base || ours == theirs { return ours }
+        }
         return side == .ours ? ours : theirs
     }
+}
+
+/// What happens to a property without `@Merge` when the other side saved the object.
+public enum UnmergedPropertyPolicy: Sendable {
+    /// Whatever SwiftData alone would do: the conflict policy's side, even when only the other side changed
+    /// the property. With `.storeDefault`, a main context's save keeps all its values, and an import keeps
+    /// all the other device's.
+    case followSwiftData
+    /// The side that changed it, so a change only one side made is never lost. Only a property both sides
+    /// changed takes the conflict policy's side.
+    case keepOneSidedChanges
+
+    var keepsChanges: Bool { self == .keepOneSidedChanges }
 }
 
 /// What a merge does when both sides changed a property and its strategy can't combine them, or the

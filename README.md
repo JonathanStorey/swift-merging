@@ -211,7 +211,7 @@ final class Note {
     @Merge(.byWord) var body = ""                       // edits to different words combine
     @Merge(.sum) var likes = 0                          // both sides' increments count
     @Merge(.keep(.theirs)) @Attribute(.externalStorage) var photo: Data?
-    var color = "red"                                   // no @Merge: keeps the side that changed it
+    var color = "red"                                   // no @Merge: as SwiftData would
     @Merge(.byMembership) @Relationship var tags: [Tag] = []
 }
 
@@ -222,14 +222,15 @@ try container.enableMerging(Note.self)                  // nothing else to call
 `@Merge` takes the same strategies as `@Merged`, and is only for SwiftData models: on anything else it's a
 compile error. `@MergeableModel` writes the model's `MergeableModel` conformance, a snapshot of every stored
 property, since a SwiftData save writes the whole object and a property left out would lose the other
-side's change. Merging is opt-in: a property or relationship without `@Merge` keeps the side that changed
-it, and only a `@Merge` strategy combines two changes. A to-many relationship merges as a set, by
+side's change. Merging is opt-in: a property or relationship without `@Merge` does what SwiftData alone
+would, and only a `@Merge` strategy merges three ways, from the base, ours and theirs. A to-many relationship merges as a set, by
 `.byMembership`, since SwiftData doesn't keep its order. `@Transient` properties are left out.
 
-When both sides change a property and its strategy can't combine them, or it has none, the default
-`.storeDefault` policy keeps what SwiftData would have kept without merging: the main context's edit over
-another context's save, and a CloudKit import over this device's earlier save. `.keepOurs` and
-`.keepTheirs` choose a side instead.
+A property without `@Merge`, or whose strategy can't combine two changes, takes the conflict policy's side.
+The default, `.storeDefault`, keeps what SwiftData would without merging: the main context's save over
+another context's, and a CloudKit import over this device's earlier save, which is CloudKit's server wins.
+`.keepOurs` and `.keepTheirs` choose a side instead, and `unmergedProperties: .keepOneSidedChanges` keeps a
+change only one side made even without `@Merge`.
 
 ## Requirements
 

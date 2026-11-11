@@ -8,9 +8,11 @@ import Testing
 @Suite struct MergeCoordinatorTests {
     /// Edits the note in the main context, unsaved, and in another context, saved, then merges and saves.
     @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
-    func merge(ours: (Note) -> Void, theirs: (Note) -> Void, policy: MergeConflictPolicy = .keepOurs) throws -> (Fixture, Saved) {
+    func merge(ours: (Note) -> Void, theirs: (Note) -> Void, policy: MergeConflictPolicy = .keepOurs,
+               unmerged: UnmergedPropertyPolicy = .followSwiftData) throws -> (Fixture, Saved) {
         let fixture = try Fixture()
-        let coordinator = try MergeCoordinator(container: fixture.container, types: [Note.self], conflictPolicy: policy)
+        let coordinator = try MergeCoordinator(container: fixture.container, types: [Note.self], conflictPolicy: policy,
+                                               unmergedProperties: unmerged)
         ours(fixture.note)
         try fixture.theirEdit(theirs)
         try coordinator.mergePendingChanges()
@@ -51,8 +53,16 @@ import Testing
     }
 
     @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
-    @Test func aPropertyWithNoStrategyKeepsTheSideThatChangedIt() throws {
-        let (_, saved) = try merge(ours: { $0.title = "Mine" }, theirs: { $0.color = "blue" })
+    @Test func aPropertyWithNoStrategyFollowsSwiftData() throws {
+        // As without merging: the main context's save writes its whole object.
+        let (_, saved) = try merge(ours: { $0.title = "Mine" }, theirs: { $0.color = "blue" }, policy: .storeDefault)
+        #expect(saved.title == "Mine")
+        #expect(saved.color == "red")
+    }
+
+    @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
+    @Test func aPropertyWithNoStrategyCanKeepTheSideThatChangedIt() throws {
+        let (_, saved) = try merge(ours: { $0.title = "Mine" }, theirs: { $0.color = "blue" }, unmerged: .keepOneSidedChanges)
         #expect(saved.title == "Mine")
         #expect(saved.color == "blue")
     }
@@ -89,8 +99,15 @@ import Testing
     }
 
     @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
-    @Test func aToOneRelationshipOnlyTheyChangedComesThrough() throws {
+    @Test func aToOneRelationshipWithNoStrategyFollowsSwiftData() throws {
         let (_, saved) = try merge(ours: { $0.title = "Mine" }, theirs: { $0.folder = Folder("Work") })
+        #expect(saved.title == "Mine")
+        #expect(saved.folder == nil)
+    }
+
+    @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
+    @Test func aToOneRelationshipOnlyTheyChangedCanComeThrough() throws {
+        let (_, saved) = try merge(ours: { $0.title = "Mine" }, theirs: { $0.folder = Folder("Work") }, unmerged: .keepOneSidedChanges)
         #expect(saved.title == "Mine")
         #expect(saved.folder == "Work")
     }

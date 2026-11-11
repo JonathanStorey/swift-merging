@@ -104,9 +104,10 @@ import Testing
 
     /// A coordinator whose ledger has forgotten the note, so only the store's report can give the base.
     @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
-    func mergeWithoutLedger(ours: (Note) -> Void, theirs: [(Note) -> Void]) throws -> Saved {
+    func mergeWithoutLedger(ours: (Note) -> Void, theirs: [(Note) -> Void],
+                            unmerged: UnmergedPropertyPolicy = .followSwiftData) throws -> Saved {
         let fixture = try Fixture()
-        let coordinator = try MergeCoordinator(container: fixture.container, types: [Note.self])
+        let coordinator = try MergeCoordinator(container: fixture.container, types: [Note.self], unmergedProperties: unmerged)
         coordinator.ledger.setBase(nil, for: fixture.id)
         ours(fixture.note)
         for edit in theirs { try fixture.theirEdit(edit) }
@@ -130,7 +131,7 @@ import Testing
 
     @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
     @Test func theReportedBaseKeepsAPropertyOnlyTheyChanged() throws {
-        let saved = try mergeWithoutLedger(ours: { $0.title = "Mine" }, theirs: [{ $0.color = "blue" }])
+        let saved = try mergeWithoutLedger(ours: { $0.title = "Mine" }, theirs: [{ $0.color = "blue" }], unmerged: .keepOneSidedChanges)
         #expect(saved.title == "Mine")
         #expect(saved.color == "blue")
     }
@@ -260,6 +261,33 @@ import Testing
         coordinator.syncEventOccurred(MergeSyncEvent(kind: .import, startDate: .now, endDate: .now, succeeded: true))
         let saved = try fixture.saved()
         #expect(saved.title == "Local")
+        #expect(saved.likes == 2)
+    }
+
+    @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
+    func importOverAnUnmergedSave(_ unmerged: UnmergedPropertyPolicy) throws -> Saved {
+        let fixture = try Fixture()
+        let coordinator = try MergeCoordinator(container: fixture.container, types: [Note.self], unmergedProperties: unmerged)
+        fixture.note.color = "green"
+        try fixture.container.mainContext.save()
+        try coordinator.mergePendingChanges()
+        // The other device only added likes, but its record still carries the color it had.
+        try fixture.importRecord { $0.color = "red"; $0.likes = 2 }
+        try coordinator.mergePendingChanges()
+        return try fixture.saved()
+    }
+
+    @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
+    @Test func anImportWinsAPropertyWithNoStrategyAsCloudKitWould() throws {
+        let saved = try importOverAnUnmergedSave(.followSwiftData)
+        #expect(saved.color == "red")
+        #expect(saved.likes == 2)
+    }
+
+    @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
+    @Test func anImportCanKeepThisDevicesChangeToAPropertyWithNoStrategy() throws {
+        let saved = try importOverAnUnmergedSave(.keepOneSidedChanges)
+        #expect(saved.color == "green")
         #expect(saved.likes == 2)
     }
 
