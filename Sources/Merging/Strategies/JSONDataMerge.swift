@@ -8,7 +8,7 @@ import Foundation
 /// an enum inside the struct:
 ///
 /// ```swift
-/// @Merge(.json(Settings.self)) var settingsJSON = Data()
+/// @Merge(.json(Settings.self)) var settingsJSON: Data = Data()
 /// var settings: Settings {
 ///     get { JSONDataMerge<Settings>.decode(settingsJSON) ?? Settings() }
 ///     set { settingsJSON = JSONDataMerge<Settings>.encode(newValue) }

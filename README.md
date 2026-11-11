@@ -224,7 +224,7 @@ for a struct holding an optional or an enum. Keep such a value as JSON instead, 
 with `.json(_:)`:
 
 ```swift
-@Merge(.json(Settings.self)) var settingsJSON = Data()
+@Merge(.json(Settings.self)) var settingsJSON: Data = Data()
 var settings: Settings {
     get { JSONDataMerge<Settings>.decode(settingsJSON) ?? Settings() }
     set { settingsJSON = JSONDataMerge<Settings>.encode(newValue) }
