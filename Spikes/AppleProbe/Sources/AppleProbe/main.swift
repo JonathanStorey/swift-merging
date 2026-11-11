@@ -121,6 +121,32 @@ MainActor.assumeIsolated {
         print("main item after their save: name=\(item.name) count=\(item.count) hasChanges=\(item.hasChanges)")
         snapshots("after their save")
 
+        section("Store contexts per editor, and cachedSnapshots for the main context")
+        do {
+            let stores = Mirror(reflecting: container).children.first { $0.label == "datastores" }!.value
+            let pair = Mirror(reflecting: stores).children.first!.value
+            let store = Mirror(reflecting: pair).children.dropFirst().first!.value as! DefaultStore
+            let contexts = Mirror(reflecting: store).children.first { $0.label == "_contextsByEditorIdentifier" }!.value as! [UUID: NSManagedObjectContext]
+            for (editor, moc) in contexts {
+                moc.performAndWait {
+                    print("editor \(editor) registered=\(moc.registeredObjects.count) author=\(moc.transactionAuthor ?? "nil")")
+                    for object in moc.registeredObjects {
+                        print("  \(object.entity.name ?? "?") fault=\(object.isFault) changed=\(object.changedValues()) committed=\(object.committedValues(forKeys: nil))")
+                    }
+                }
+            }
+            let editing = Mirror(reflecting: main).children.first { $0.label == "editingState" }!.value as! EditingState
+            print("main editingState: \(editing)")
+            let cached = try store.cachedSnapshots(for: [item.persistentModelID], editingState: editing)
+            for (id, snapshot) in cached {
+                let json = try JSONEncoder().encode(snapshot)
+                print("cachedSnapshot \(id): \(String(decoding: json, as: UTF8.self))")
+            }
+            if cached.isEmpty { print("cachedSnapshots: empty") }
+        } catch {
+            print("store probe error: \(error)")
+        }
+
         section("committedValues on Core Data objects found")
         for object in found["NSManagedObject"] ?? [] {
             if let managed = object as? NSManagedObject {

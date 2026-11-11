@@ -22,6 +22,9 @@ jobs:
           wc -l out/*.swiftinterface
           echo "==== SwiftData interface: history, snapshots, stores, notifications ===="
           grep -n -E "History|Snapshot|DataStore|willSave|didSave|author|NotificationKey|BackingData|Observer|merge|Merge" out/SwiftData.swiftinterface | grep -v -E "^\s*$" | cut -c1-260 | head -400
+          echo "==== EditingState and store request types ===="
+          grep -n -i -E "editingState|struct EditingState|ModelContext|var author" out/SwiftData.swiftinterface | cut -c1-240 | head -80
+          sed -n '228,330p' out/SwiftData.swiftinterface | cut -c1-240
           echo "==== CloudKit event header ===="
           cat out/CoreDataHeaders/NSPersistentCloudKitContainerEvent.h || true
           echo "==== Merge policy header (conflict snapshots) ===="
