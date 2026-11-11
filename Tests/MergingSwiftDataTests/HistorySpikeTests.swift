@@ -35,6 +35,32 @@ import Testing
     }
 
     @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
+    @Test func historyRecordsAToManyRelationshipChange() throws {
+        let fixture = try Fixture()
+        try fixture.theirEdit { $0.tags.append(Tag("c")) }
+        let last = try #require(try ModelContext(fixture.container).fetchHistory(HistoryDescriptor<DefaultHistoryTransaction>()).last)
+        let noteUpdates = last.changes.compactMap { change -> DefaultHistoryUpdate<Note>? in
+            guard case .update(let update) = change else { return nil }
+            return update as? DefaultHistoryUpdate<Note>
+        }
+        print("Spike: to-many change, Note updatedAttributes =", noteUpdates.map(\.updatedAttributes))
+        #expect(noteUpdates.contains { $0.updatedAttributes.contains(\Note.tags) })
+    }
+
+    @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
+    @Test func aDecodedIdentifierFindsItsObject() throws {
+        let fixture = try Fixture()
+        let decoded = try JSONDecoder().decode(PersistentIdentifier.self, from: JSONEncoder().encode(fixture.id))
+        print("Spike: decoded == original:", decoded == fixture.id, "same hash:", decoded.hashValue == fixture.id.hashValue)
+        let found: Note? = fixture.container.mainContext.registeredModel(for: decoded)
+        var descriptor = FetchDescriptor<Note>(predicate: #Predicate { $0.persistentModelID == decoded })
+        descriptor.fetchLimit = 1
+        let fetched = try ModelContext(fixture.container).fetch(descriptor).first
+        print("Spike: decoded id registered:", found != nil, "fetched:", fetched != nil)
+        #expect(found != nil || fetched != nil)
+    }
+
+    @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
     @Test func unsavedEditsSurviveAnotherContextsSave() throws {
         let fixture = try Fixture()
         fixture.note.title = "Mine"

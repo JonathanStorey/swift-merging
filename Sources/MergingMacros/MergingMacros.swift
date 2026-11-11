@@ -29,22 +29,40 @@ public struct MergeableModelMacro: ExtensionMacro {
         let access = model.modifiers.contains { [.keyword(.public), .keyword(.open)].contains($0.name.tokenKind) } ? "public " : ""
         let typeName = type.trimmedDescription
 
-        let fields = properties.map { "\(access)var \($0.name): \($0.type)" }
-        let parameters = properties.map { "\($0.name): \($0.type)" }.joined(separator: ", ")
+        let fields = properties.map { "\(access)var \($0.name): \($0.snapshotType)" }
+        let parameters = properties.map { "\($0.name): \($0.snapshotType)" }.joined(separator: ", ")
         let assignments = properties.map { "self.\($0.name) = \($0.name)" }
-        let arguments = properties.map { "\($0.name): self.\($0.name)" }.joined(separator: ", ")
-        let applies = properties.map { "if self.\($0.name) != snapshot.\($0.name) { self.\($0.name) = snapshot.\($0.name) }" }
+        let arguments = properties.map { property in
+            switch property.kind {
+            case .value: "\(property.name): self.\(property.name)"
+            case .toMany: "\(property.name): MergingSwiftData.MergeRelationship.keys(self.\(property.name))"
+            case .toOne: "\(property.name): MergingSwiftData.MergeRelationship.key(self.\(property.name))"
+            }
+        }.joined(separator: ", ")
+        let applies = properties.map { property in
+            let name = property.name
+            switch property.kind {
+            case .value:
+                return "if self.\(name) != snapshot.\(name) { self.\(name) = snapshot.\(name) }"
+            case .toMany:
+                return "if MergingSwiftData.MergeRelationship.keys(self.\(name)) != snapshot.\(name) { self.\(name) = MergingSwiftData.MergeRelationship.models(snapshot.\(name), current: self.\(name), in: self.modelContext) }"
+            case .toOne(let optional):
+                let restored = "MergingSwiftData.MergeRelationship.model(snapshot.\(name), current: self.\(name), in: self.modelContext)"
+                let assign = optional ? "self.\(name) = \(restored)" : "if let related = \(restored) { self.\(name) = related }"
+                return "if MergingSwiftData.MergeRelationship.key(self.\(name)) != snapshot.\(name) { \(assign) }"
+            }
+        }
         let keyPaths = properties.map { "\\\(typeName).\($0.name)" }.joined(separator: ", ")
         // A property with a strategy merges by it, through `Merged`; the rest keep the side that changed them,
         // or merge their parts, as a `Codable` value does. A clash the merge can't settle takes `side`.
         let merges = properties.map { property in
             let name = property.name
             let fallback = "(side == .ours ? ours.\(name) : theirs.\(name))"
-            if let strategy = property.strategy {
+            if let strategy = property.mergeStrategy {
                 return "\(name): Merging.Merged(wrappedValue: ours.\(name), \(strategy)).merging(with: theirs.\(name), from: base.\(name)) ?? \(fallback)"
             }
             let total = { (side: String) in
-                "Merging.CodableTotalMerge<\(property.type), Merging.\(side)>().merge(base: base.\(name), ours: ours.\(name), theirs: theirs.\(name))"
+                "Merging.CodableTotalMerge<\(property.snapshotType), Merging.\(side)>().merge(base: base.\(name), ours: ours.\(name), theirs: theirs.\(name))"
             }
             return "\(name): (side == .ours ? \(total("OursSide")) : \(total("TheirsSide"))) ?? \(fallback)"
         }
@@ -115,31 +133,77 @@ public struct MergeMacro: PeerMacro {
 
 /// A stored property the snapshot holds.
 struct StoredProperty {
+    /// What a property holds, which decides how the snapshot holds it.
+    enum Kind {
+        case value
+        /// A to-many relationship, held as a set of keys.
+        case toMany
+        /// A to-one relationship, held as an optional key. `optional` is whether the property can be `nil`.
+        case toOne(optional: Bool)
+    }
+
     let name: String
     let type: String
-    /// The `@Merge` arguments, such as `.sum`, or `nil` to keep the side that changed it.
+    let kind: Kind
+    /// The `@Merge` arguments, such as `.sum`, or `nil` for the default.
     let strategy: String?
 
-    /// Every stored `var` of a model, except static, computed, `@Transient`, and `@Relationship` ones.
+    /// The property's type in the snapshot.
+    var snapshotType: String {
+        switch kind {
+        case .value: type
+        case .toMany: "Set<String>"
+        case .toOne: "String?"
+        }
+    }
+
+    /// The strategy it merges by: its own, or by membership for a to-many relationship.
+    var mergeStrategy: String? {
+        if let strategy { return strategy }
+        if case .toMany = kind { return ".byMembership" }
+        return nil
+    }
+
+    /// Every stored `var` of a model, except static, computed, and `@Transient` ones. A relationship needs
+    /// `@Relationship` to be merged as one.
     static func all(in model: ClassDeclSyntax) throws -> [StoredProperty] {
         var properties: [StoredProperty] = []
         for member in model.memberBlock.members {
             guard let variable = member.decl.as(VariableDeclSyntax.self),
                   variable.bindingSpecifier.tokenKind == .keyword(.var),
                   !variable.modifiers.contains(where: { [.keyword(.static), .keyword(.class)].contains($0.name.tokenKind) }),
-                  variable.attributes.attribute(named: "Transient") == nil,
-                  variable.attributes.attribute(named: "Relationship") == nil else { continue }
+                  variable.attributes.attribute(named: "Transient") == nil else { continue }
+            let isRelationship = variable.attributes.attribute(named: "Relationship") != nil
             let strategy = variable.attributes.attribute(named: "Merge")?.arguments?.trimmedDescription
             for binding in variable.bindings {
                 guard binding.accessorBlock == nil, let pattern = binding.pattern.as(IdentifierPatternSyntax.self) else { continue }
                 let name = pattern.identifier.text
-                guard let type = binding.typeAnnotation?.type.trimmedDescription ?? literalType(of: binding.initializer?.value) else {
+                guard let typeSyntax = binding.typeAnnotation?.type else {
+                    if !isRelationship, let type = literalType(of: binding.initializer?.value) {
+                        properties.append(StoredProperty(name: name, type: type, kind: .value, strategy: strategy))
+                        continue
+                    }
                     throw MergingDiagnostic.error(at: binding, "'\(name)' needs a type annotation for @MergeableModel to merge it", id: "no-type")
                 }
-                properties.append(StoredProperty(name: name, type: type, strategy: strategy))
+                let kind: Kind = isRelationship ? relationshipKind(of: typeSyntax) : .value
+                properties.append(StoredProperty(name: name, type: typeSyntax.trimmedDescription, kind: kind, strategy: strategy))
             }
         }
         return properties
+    }
+
+    /// To-many for an array, optional or not, and to-one for anything else.
+    private static func relationshipKind(of type: TypeSyntax) -> Kind {
+        var unwrapped = type
+        var optional = false
+        if let wrapped = type.as(OptionalTypeSyntax.self) {
+            unwrapped = wrapped.wrappedType
+            optional = true
+        } else if let wrapped = type.as(ImplicitlyUnwrappedOptionalTypeSyntax.self) {
+            unwrapped = wrapped.wrappedType
+            optional = true
+        }
+        return unwrapped.is(ArrayTypeSyntax.self) ? .toMany : .toOne(optional: optional)
     }
 
     /// The type of a string, number, or Boolean literal.

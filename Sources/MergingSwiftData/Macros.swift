@@ -3,8 +3,12 @@ import SwiftData
 
 /// Makes a SwiftData `@Model` class merge property by property, by writing its `MergeableModel`
 /// conformance. Every stored property merges: one marked `@Merge(.strategy)` by that strategy when both
-/// sides changed it, and the rest by keeping the side that changed it. `@Transient` and `@Relationship`
-/// properties are left out.
+/// sides changed it, and the rest by keeping the side that changed it. `@Transient` properties are left out.
+///
+/// A `@Relationship` merges by which objects it holds. A to-many one is a set, since SwiftData doesn't keep
+/// its order: by default both sides' additions stay and either side's removals stick (`.byMembership`), and
+/// `@Merge(.union)` keeps everything either side had. A to-one relationship keeps the side that changed it,
+/// or takes `@Merge(.keep(.theirs))`. An object the other side deleted drops out.
 ///
 /// ```swift
 /// @Model @MergeableModel
@@ -13,6 +17,7 @@ import SwiftData
 ///     @Merge(.sum) var likes = 0
 ///     @Merge(.keep(.theirs)) @Attribute(.externalStorage) var photo: Data?
 ///     var color = "red"
+///     @Relationship var tags: [Tag] = []
 /// }
 /// ```
 ///

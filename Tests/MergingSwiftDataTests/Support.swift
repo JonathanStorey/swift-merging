@@ -13,6 +13,8 @@ final class Note {
     var steps: [String]
     var color = "red"
     @Merge(.keep(.theirs)) @Attribute(.externalStorage) var photo: Data?
+    @Relationship(inverse: \Tag.notes) var tags: [Tag] = []
+    @Relationship var folder: Folder?
 
     init(title: String = "Draft", body: String = "the quick brown fox", likes: Int = 0, steps: [String] = ["prep"]) {
         self.title = title
@@ -20,6 +22,19 @@ final class Note {
         self.likes = likes
         self.steps = steps
     }
+}
+
+@Model final class Tag {
+    var name: String
+    var notes: [Note] = []
+
+    init(_ name: String) { self.name = name }
+}
+
+@Model final class Folder {
+    var name: String
+
+    init(_ name: String) { self.name = name }
 }
 
 /// A note's values, read while its context is alive.
@@ -30,6 +45,8 @@ struct Saved: Equatable {
     var steps: [String]
     var color: String
     var photo: Data?
+    var tags: Set<String>
+    var folder: String?
 }
 
 /// A container on a fresh file, since history needs a store on disk, with one saved note.
@@ -46,6 +63,7 @@ struct Fixture {
         container.mainContext.autosaveEnabled = false
         note = Note()
         container.mainContext.insert(note)
+        note.tags = [Tag("a"), Tag("b")]
         try container.mainContext.save()
         id = note.persistentModelID
     }
@@ -70,7 +88,8 @@ struct Fixture {
     func saved() throws -> Saved {
         let context = ModelContext(container)
         let note = try note(in: context)
-        return Saved(title: note.title, body: note.body, likes: note.likes, steps: note.steps, color: note.color, photo: note.photo)
+        return Saved(title: note.title, body: note.body, likes: note.likes, steps: note.steps, color: note.color, photo: note.photo,
+                     tags: Set(note.tags.map(\.name)), folder: note.folder?.name)
     }
 
     /// Changes the note in another context and saves it.

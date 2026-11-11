@@ -77,6 +77,25 @@ import Testing
     }
 
     @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
+    @Test func tagsBothSidesAddedAreKept() throws {
+        let (_, saved) = try merge(ours: { $0.tags.append(Tag("mine")) }, theirs: { $0.tags.append(Tag("theirs")) })
+        #expect(saved.tags == ["a", "b", "mine", "theirs"])
+    }
+
+    @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
+    @Test func aTagOneSideRemovedStaysRemovedWhileTheOtherAdds() throws {
+        let (_, saved) = try merge(ours: { $0.tags.removeAll { $0.name == "a" } }, theirs: { $0.tags.append(Tag("c")) })
+        #expect(saved.tags == ["b", "c"])
+    }
+
+    @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
+    @Test func aToOneRelationshipOnlyTheyChangedComesThrough() throws {
+        let (_, saved) = try merge(ours: { $0.title = "Mine" }, theirs: { $0.folder = Folder("Work") })
+        #expect(saved.title == "Mine")
+        #expect(saved.folder == "Work")
+    }
+
+    @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
     @Test func aConflictKeepsOursByDefault() throws {
         let (_, saved) = try merge(ours: { $0.body = "the slow brown fox" }, theirs: { $0.body = "the fast brown fox" })
         #expect(saved.body == "the slow brown fox")
