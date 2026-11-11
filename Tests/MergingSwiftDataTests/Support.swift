@@ -93,10 +93,16 @@ struct Fixture {
     }
 
     /// Changes the note in another context and saves it.
-    func theirEdit(_ edit: (Note) -> Void) throws {
-        let context = otherContext()
+    func theirEdit(author: String = "sync", _ edit: (Note) -> Void) throws {
+        let context = otherContext(author: author)
         edit(try note(in: context))
         try context.save()
+    }
+
+    /// Saves another device's version of the note as CloudKit's import would: every property, as that
+    /// device holds it, written over this one's.
+    func importRecord(_ edit: (Note) -> Void) throws {
+        try theirEdit(author: MergeCoordinator.cloudKitImportAuthor, edit)
     }
 }
 

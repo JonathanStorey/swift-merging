@@ -64,12 +64,26 @@ extension MergeableModel where MergeSnapshot: Mergeable {
     }
 }
 
-/// What a merge does when both sides changed a property and its strategy can't combine them. Only that
-/// property takes the side: every other property still merges.
+/// What a merge does when both sides changed a property and its strategy can't combine them, or the
+/// property has no strategy. Only that property takes a side: every other property still merges.
 public enum MergeConflictPolicy: Sendable {
-    /// Keeps this device's unsaved edits.
+    /// Keeps whichever side SwiftData would have kept with no merge at all, so a merge never does worse
+    /// than SwiftData alone. A save from the main context writes the whole object, so its unsaved edits
+    /// win over another context's save. An import from a sync service is written after this device's own
+    /// save, so the import wins over that save.
+    case storeDefault
+    /// Keeps this device's edits.
     case keepOurs
     /// Takes what the other side saved.
     case keepTheirs
+
+    /// The side a clash takes, where `store` is the side SwiftData alone would keep.
+    func side(whereStoreKeeps store: MergeSide) -> MergeSide {
+        switch self {
+        case .storeDefault: store
+        case .keepOurs: .ours
+        case .keepTheirs: .theirs
+        }
+    }
 }
 #endif
