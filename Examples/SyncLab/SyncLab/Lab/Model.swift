@@ -3,7 +3,10 @@ import MergingSwiftData
 import SwiftData
 
 /// A Codable value with a bit of everything SwiftData stores in its own way: a nested struct, an enum, a
-/// dictionary, an array of structs, and an optional.
+/// dictionary, and an array of structs.
+///
+/// No optional: on iOS 18.6, SwiftData stops the app with "Failed to materialize a keypath for spec.caption"
+/// when a Codable property's struct holds a `String?`, as soon as a store with it opens.
 struct Spec: Codable, Equatable, Sendable {
     struct Size: Codable, Equatable, Sendable {
         var width = 1.0
@@ -23,7 +26,7 @@ struct Spec: Codable, Equatable, Sendable {
     var shape = Shape.circle
     var options: [String: Int] = [:]
     var points: [Point] = []
-    var caption: String? = nil
+    var caption = ""
 }
 
 /// The object every test edits. Each kind of data the lab checks has its own property, and every property
