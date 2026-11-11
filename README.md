@@ -198,9 +198,10 @@ tree.difference(from: original)                     // ["~ age: 30 → 31", "+ t
 ## SwiftData (experimental)
 
 `MergingSwiftData` merges a SwiftData model property by property when another context, process, or device
-saves the same object while the main context has unsaved edits. It reads the store's history to see what
-the other side changed, keeps each object's base in a ledger since history doesn't record old values, and
-merges with the same strategies as above. Needs iOS 18 or macOS 15.
+saves the same object. It reads the store's history to see what changed, and takes the base, the values
+before the other side's save, from Core Data's own report of that save as it happens, with a ledger as a
+fallback. CloudKit imports merge against the last version both devices agreed on, which finished exports
+keep current. Needs iOS 18 or macOS 15.
 
 ```swift
 import MergingSwiftData
@@ -220,7 +221,13 @@ try container.enableMerging(Note.self)                  // nothing else to call
 `@Merge` takes the same strategies as `@Merged`, and is only for SwiftData models: on anything else it's a
 compile error. `@MergeableModel` writes the model's `MergeableModel` conformance, a snapshot of every stored
 property, since a SwiftData save writes the whole object and a property left out would lose the other
-side's change. `@Transient` and `@Relationship` properties are left out.
+side's change. A to-many `@Relationship` merges by which objects it holds, and `@Transient` properties are
+left out.
+
+When both sides change a property and its strategy can't combine them, or it has none, the default
+`.storeDefault` policy keeps what SwiftData would have kept without merging: the main context's edit over
+another context's save, and a CloudKit import over this device's earlier save. `.keepOurs` and
+`.keepTheirs` choose a side instead.
 
 ## Requirements
 
