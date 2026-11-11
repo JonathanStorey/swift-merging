@@ -212,8 +212,7 @@ confirmed. It uses public API only. It reads CloudKit's events, the save notific
 posts, and CloudKit's per-object metadata rows as those saves carry them.
 
 There's one monitor per container, since CloudKit syncs each store on its own and every context on a
-container shares its stores. `container.sync` owns it, `context.sync` reaches the same one with the context
-alongside so it can save, and `.syncMonitor(for:)` puts it in the SwiftUI environment.
+container shares its stores. `container.sync` and `context.sync` are the same object, and `.syncMonitor(for:)` puts it in the SwiftUI environment.
 
 ```swift
 import Persistence
@@ -234,7 +233,7 @@ context.sync.activity                     // .idle, .settingUp, .importing, .exp
 context.sync.status(of: note)             // .unsaved, .pending(since:), .synced(at:), .localOnly, .unknown
 
 // "Sync now", as far as public API goes: save, which starts an upload, then wait for CloudKit to confirm it.
-let result = try await context.sync.saveAndWait(timeout: .seconds(30))   // .completed, .timedOut, .failed, .notSyncing
+let result = try await context.saveAndWaitForUpload(timeout: .seconds(30))   // .completed, .timedOut, .failed, .notSyncing
 ```
 
 `SyncMonitor` is `@Observable` and shows the activity, the last import and export, the latest problem (not

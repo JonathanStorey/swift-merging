@@ -12,8 +12,8 @@ import SwiftData
 /// alternatives: a save starts an export, and the `wait` methods return once CloudKit confirms the work.
 ///
 /// There's one per container, since sync happens per store and every context on a container shares its
-/// stores. Get it from `container.sync`, or from `context.sync`, which also knows the context to save, or
-/// from the SwiftUI environment with `@Environment(SyncMonitor.self)` after `.syncMonitor(for:)`.
+/// stores. Get it from `container.sync` or `context.sync`, which are the same object, or from the SwiftUI
+/// environment with `@Environment(SyncMonitor.self)` after `.syncMonitor(for:)`.
 @MainActor
 @Observable
 public final class SyncMonitor {

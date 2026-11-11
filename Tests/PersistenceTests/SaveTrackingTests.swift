@@ -46,7 +46,7 @@ import Testing
         item.name = "second"
         #expect(context.sync.status(of: item) == .unsaved)
         // One monitor per container, whichever context asks.
-        #expect(context.sync.monitor === fixture.container.sync)
+        #expect(context.sync === fixture.container.sync)
         #expect(context.sync.activity == .idle)
     }
 
