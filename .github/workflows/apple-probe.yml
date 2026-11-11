@@ -26,6 +26,34 @@ jobs:
           lldb --batch -o "breakpoint set -n probeReady" -o "run" -o "command script import calls.py" -o "calls" -o "kill" ./dump > calls.txt 2>&1
           grep -E "^FUNCTIONS" calls.txt
           sed -n '/^FUNC /,$p' calls.txt
+      - name: Read the key functions in full
+        working-directory: Spikes/Mirroring
+        run: |
+          set +e
+          cat > full.lldb <<'LLDB'
+          disassemble -n "__39-[PFCloudKitExporter exportIfNecessary]_block_invoke_2"
+          disassemble -n "__150-[PFCloudKitSerializer applyUpdatedRecords:deletedRecordIDs:toStore:inManagedObjectContext:onlyUpdatingAttributes:andRelationships:madeChanges:error:]_block_invoke"
+          disassemble -n "-[PFCloudKitHistoryAnalyzer processTransaction:withContext:error:]"
+          disassemble -n "-[PFCloudKitHistoryAnalyzerContext processChange:error:]"
+          disassemble -n "__95-[PFCloudKitExporter exportOperationFinished:withSavedRecords:deletedRecordIDs:operationError:]_block_invoke_2"
+          disassemble -n "-[NSCloudKitMirroringDelegate managedObjectContextSaved:]"
+          disassemble -n "+[PFCloudKitHistoryAnalyzer isPrivateTransaction:]"
+          disassemble -n "+[PFCloudKitHistoryAnalyzer isPrivateTransactionAuthor:]"
+          LLDB
+          lldb --batch -o "breakpoint set -n probeReady" -o "run" -o "command source -e false full.lldb" -o "kill" ./dump > full.txt 2>&1
+          wc -l full.txt
+          echo "==== Save policy ===="
+          grep -B14 -A2 "setSavePolicy" full.txt
+          echo "==== Rejecting import values for pending local edits ===="
+          grep -n -B60 -A4 "Importer is rejecting" full.txt | grep -E ";|rejecting" | cut -c1-200
+          echo "==== Mergeable storage ===="
+          grep -n -B10 -A30 "usesMergeableStorage" full.txt | grep -E ";" | cut -c1-200
+          echo "==== Export finished: what it records ===="
+          sed -n '/exportOperationFinished/,/^CoreData`/p' full.txt | grep ";" | cut -c1-200 | head -150
+          echo "==== Private transaction authors ===="
+          sed -n '/isPrivateTransaction/,$p' full.txt | grep ";" | cut -c1-200 | head -80
+          echo "==== History analyzer ===="
+          sed -n '/processTransaction:withContext/,/managedObjectContextSaved/p' full.txt | grep -E "; (objc_msgSend|\"|@\"|-\[|\+\[)" | cut -c1-200 | head -200
       - uses: actions/upload-artifact@v4
         with:
           name: mirroring
