@@ -41,6 +41,15 @@ enum RuleLab {
             outcome = judge(Merged(wrappedValue: ours.steps, .byElement).merging(with: theirs.steps), want: two.steps, &failures)
         case .codable:
             outcome = judge(Merged(wrappedValue: ours.spec, .byNode).merging(with: theirs.spec), want: two.spec, &failures)
+        case .codableTotal:
+            // Without a base, total can't tell which side changed a part, so every difference goes to theirs.
+            let merged = Merged(wrappedValue: ours.layout, .total(favoring: .theirs)).merging(with: theirs.layout)
+            if merged == theirs.layout {
+                outcome = "kept theirs wherever the two differ, as .total(favoring: .theirs) does without a base"
+            } else {
+                failures.append("2-way: .total(favoring: .theirs) didn't keep theirs where the two differ")
+                outcome = "didn't keep theirs"
+            }
         case .relationship:
             outcome = judge(Merged(wrappedValue: ours.labels, .byMembership).merging(with: theirs.labels), want: two.labels, &failures)
         case .blob:

@@ -4,12 +4,6 @@ import SwiftData
 
 /// A Codable value with a bit of everything SwiftData stores in its own way: a nested struct, a dictionary,
 /// and an array of structs.
-///
-/// SwiftData on iOS 18.6 stops the app, as soon as a store opens, when a Codable property's struct holds
-/// either of two things, so this one holds neither:
-/// - an optional, such as `String?`: "Failed to materialize a keypath for spec.caption"
-/// - an enum, even a plain `String` raw-value one: "Failed to validate spec.shape.shape because shape is not
-///   a member of Shape"
 struct Spec: Codable, Equatable, Sendable {
     struct Size: Codable, Equatable, Sendable {
         var width = 1.0
@@ -37,6 +31,9 @@ final class Item {
     @Merge(.byWord) var title: String = ""
     @Merge(.byElement) var steps: [String] = []
     @Merge(.byNode) var spec: Spec = Spec()
+    /// The same kind of value as `spec`, merged so a clash never stops the merge: where two editors set the
+    /// same part differently, theirs wins and every other edit still lands.
+    @Merge(.total(favoring: .theirs)) var layout: Spec = Spec()
     @Merge(.byMembership) @Relationship(deleteRule: .nullify, inverse: \Tag.items) var labels: [Tag]? = []
     @Merge(.keep(.theirs)) @Attribute(.externalStorage) var blob: Data? = nil
 

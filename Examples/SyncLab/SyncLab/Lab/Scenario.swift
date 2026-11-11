@@ -3,7 +3,7 @@ import SwiftData
 
 /// The kinds of data the lab syncs, one test each per stage.
 enum DataKind: String, CaseIterable, Identifiable, Sendable {
-    case string, strings, codable, relationship, blob
+    case string, strings, codable, codableTotal, relationship, blob
 
     var id: String { rawValue }
 
@@ -12,6 +12,7 @@ enum DataKind: String, CaseIterable, Identifiable, Sendable {
         case .string: "String"
         case .strings: "[String]"
         case .codable: "Codable struct"
+        case .codableTotal: "Codable, clashing edits"
         case .relationship: "Relationship"
         case .blob: "External storage blob"
         }
@@ -22,6 +23,7 @@ enum DataKind: String, CaseIterable, Identifiable, Sendable {
         case .string: "textformat"
         case .strings: "list.bullet"
         case .codable: "curlybraces"
+        case .codableTotal: "curlybraces.square"
         case .relationship: "link"
         case .blob: "photo.stack"
         }
@@ -32,6 +34,7 @@ enum DataKind: String, CaseIterable, Identifiable, Sendable {
         case .string: "@Merge(.byWord)"
         case .strings: "@Merge(.byElement)"
         case .codable: "@Merge(.byNode)"
+        case .codableTotal: "@Merge(.total(favoring: .theirs))"
         case .relationship: "@Merge(.byMembership)"
         case .blob: "@Merge(.keep(.theirs)) @Attribute(.externalStorage)"
         }
@@ -43,6 +46,9 @@ enum DataKind: String, CaseIterable, Identifiable, Sendable {
         case .string: "upper-cases “\(Scenario.titleWord(Scenario.stringWords[editor]))” in the title"
         case .strings: "appends “editor-\(editor)” to the steps"
         case .codable: ["sets size.width to 5 and adds a caption", "adds options[\"editor-1\"]", "appends a point"][editor]
+        case .codableTotal:
+            ["sets size.width to 5", "adds options[\"editor-1\"]", "appends a point"][editor]
+                + ", and sets the caption and size.height every editor sets"
         case .relationship: "adds the label “editor-\(editor)”"
         case .blob: editor == 0 ? "replaces the 256 KB blob" : "upper-cases “\(Scenario.titleWord(Scenario.blobTitleWords[editor]))” in the title"
         }
@@ -59,6 +65,10 @@ enum DataKind: String, CaseIterable, Identifiable, Sendable {
             var spec = item.spec
             Scenario.edit(&spec, by: editor)
             item.spec = spec
+        case .codableTotal:
+            var layout = item.layout
+            Scenario.editClashing(&layout, by: editor)
+            item.layout = layout
         case .relationship:
             let label = Tag(name: "editor-\(editor)")
             context.insert(label)
@@ -87,6 +97,12 @@ enum DataKind: String, CaseIterable, Identifiable, Sendable {
             case 1: return values.spec.options["editor-1"] != nil
             default: return values.spec.points.count > Scenario.baseSpec.points.count
             }
+        case .codableTotal:
+            switch editor {
+            case 0: return values.layout.size.width == edited.layout.size.width
+            case 1: return values.layout.options["editor-1"] != nil
+            default: return values.layout.points.count > Scenario.baseSpec.points.count
+            }
         case .relationship: return values.labels.contains("editor-\(editor)")
         case .blob:
             if editor == 0 { return values.blob == edited.blob }
@@ -111,6 +127,14 @@ enum DataKind: String, CaseIterable, Identifiable, Sendable {
         // members here, and devices are checked against each other separately.
         if actual.steps.sorted() != want.steps.sorted() { lines.append("steps are \(actual.steps), expected \(want.steps)") }
         if actual.spec != want.spec { lines.append("spec is \(actual.spec.text), expected \(want.spec.text)") }
+        // Every editor sets the caption and height, so which one wins depends on the order the merges ran in.
+        // Any editor's value passes, as long as the parts no one else touched all landed.
+        var wantLayout = want.layout
+        if self == .codableTotal {
+            if Scenario.clashingCaptions(editors).contains(actual.layout.caption) { wantLayout.caption = actual.layout.caption }
+            if Scenario.clashingHeights(editors).contains(actual.layout.size.height) { wantLayout.size.height = actual.layout.size.height }
+        }
+        if actual.layout != wantLayout { lines.append("layout is \(actual.layout.text), expected \(wantLayout.text)") }
         if actual.labels != want.labels {
             lines.append("labels are \(actual.labels.sorted()), expected \(want.labels.sorted())")
         }
@@ -163,11 +187,25 @@ enum Scenario {
         }
     }
 
+    /// Editor `editor`'s change to its own part, plus a caption and height that every editor sets differently.
+    static func editClashing(_ spec: inout Spec, by editor: Int) {
+        edit(&spec, by: editor)
+        spec.caption = clashingCaptions(editor + 1)[editor]
+        spec.size.height = clashingHeights(editor + 1)[editor]
+    }
+
+    /// The captions the first `editors` editors set in the clashing test.
+    static func clashingCaptions(_ editors: Int) -> [String] { (0..<editors).map { "set by editor \($0)" } }
+
+    /// The heights the first `editors` editors set in the clashing test.
+    static func clashingHeights(_ editors: Int) -> [Double] { (0..<editors).map { Double($0 + 2) } }
+
     /// Fills a new item with the base values. Insert the item first.
     @MainActor static func seed(_ item: Item, in context: ModelContext) {
         item.title = baseTitle
         item.steps = baseSteps
         item.spec = baseSpec
+        item.layout = baseSpec
         item.blob = baseBlob
         let label = Tag(name: baseLabel)
         context.insert(label)
@@ -195,13 +233,15 @@ struct ItemValues: Equatable, Sendable {
     var title: String
     var steps: [String]
     var spec: Spec
+    var layout: Spec
     var labels: Set<String>
     var blob: BlobSummary?
 
-    init(title: String, steps: [String], spec: Spec, labels: Set<String>, blob: BlobSummary?) {
+    init(title: String, steps: [String], spec: Spec, layout: Spec, labels: Set<String>, blob: BlobSummary?) {
         self.title = title
         self.steps = steps
         self.spec = spec
+        self.layout = layout
         self.labels = labels
         self.blob = blob
     }
@@ -210,12 +250,13 @@ struct ItemValues: Equatable, Sendable {
         title = item.title
         steps = item.steps
         spec = item.spec
+        layout = item.layout
         labels = Set((item.labels ?? []).map(\.name))
         blob = item.blob.map(BlobSummary.init)
     }
 
     var summary: String {
-        "title “\(title)”, steps \(steps), spec \(spec.text), labels \(labels.sorted()), blob \(blob?.description ?? "nil")"
+        "title “\(title)”, steps \(steps), spec \(spec.text), layout \(layout.text), labels \(labels.sorted()), blob \(blob?.description ?? "nil")"
     }
 }
 
@@ -244,6 +285,7 @@ struct Draft {
     var title = Scenario.baseTitle
     var steps = Scenario.baseSteps
     var spec = Scenario.baseSpec
+    var layout = Scenario.baseSpec
     var labels: Set<String> = [Scenario.baseLabel]
     var blob: Data? = Scenario.baseBlob
 
@@ -253,6 +295,7 @@ struct Draft {
         title = snapshot.title
         steps = snapshot.steps
         spec = snapshot.spec
+        layout = snapshot.layout
         labels = snapshot.labels
         blob = snapshot.blob
     }
@@ -262,6 +305,7 @@ struct Draft {
         case .string: title = Scenario.uppercasing(title, word: Scenario.stringWords[editor])
         case .strings: steps.append("editor-\(editor)")
         case .codable: Scenario.edit(&spec, by: editor)
+        case .codableTotal: Scenario.editClashing(&layout, by: editor)
         case .relationship: labels.insert("editor-\(editor)")
         case .blob:
             if editor == 0 {
@@ -273,12 +317,12 @@ struct Draft {
     }
 
     var values: ItemValues {
-        ItemValues(title: title, steps: steps, spec: spec, labels: labels, blob: blob.map(BlobSummary.init))
+        ItemValues(title: title, steps: steps, spec: spec, layout: layout, labels: labels, blob: blob.map(BlobSummary.init))
     }
 
     /// As a snapshot, with each label's name standing in for its object's key.
     var snapshot: Item.MergeSnapshot {
-        Item.MergeSnapshot(key: "rules", title: title, steps: steps, spec: spec, labels: labels, blob: blob)
+        Item.MergeSnapshot(key: "rules", title: title, steps: steps, spec: spec, layout: layout, labels: labels, blob: blob)
     }
 }
 

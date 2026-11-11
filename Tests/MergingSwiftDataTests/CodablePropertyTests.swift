@@ -30,6 +30,15 @@ final class Sheet {
     init() {}
 }
 
+/// The same Codable struct merged with `.total`, once favoring each side, so a clash never stops the merge.
+@Model @MergeableModel
+final class Canvas {
+    @Merge(.total(favoring: .theirs)) var shared: Layout = Layout()
+    @Merge(.total(favoring: .ours)) var draft: Layout = Layout()
+
+    init() {}
+}
+
 @MainActor
 @Suite struct CodablePropertyTests {
     @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
@@ -116,6 +125,51 @@ final class Sheet {
         #expect(saved.size.width == 5)
         #expect(saved.options == ["base": 0, "theirs": 1])
         #expect(saved.points == [Layout.Point(x: 2, y: 2)])
+    }
+
+    /// Both contexts set the same caption differently and each changes a part of its own. The clash goes to
+    /// the side each property favors, and every other edit lands.
+    @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
+    @Test func totalMergesACodablePropertyAndSettlesClashesByItsSide() throws {
+        let url = FileManager.default.temporaryDirectory.appending(path: "total-\(UUID().uuidString).store")
+        let container = try ModelContainer(for: Canvas.self, configurations: ModelConfiguration(url: url))
+        container.mainContext.autosaveEnabled = false
+        let board = Canvas()
+        container.mainContext.insert(board)
+        try container.mainContext.save()
+        let id = board.persistentModelID
+        let coordinator = try MergeCoordinator(container: container, types: [Canvas.self])
+
+        board.shared.size.width = 5
+        board.shared.caption = "ours"
+        board.draft.size.width = 5
+        board.draft.caption = "ours"
+        let context = ModelContext(container)
+        context.author = "sync"
+        var descriptor = FetchDescriptor<Canvas>(predicate: #Predicate { $0.persistentModelID == id })
+        descriptor.fetchLimit = 1
+        let theirs = try #require(try context.fetch(descriptor).first)
+        theirs.shared.options["theirs"] = 1
+        theirs.shared.caption = "theirs"
+        theirs.draft.points.append(Layout.Point(x: 2, y: 2))
+        theirs.draft.caption = "theirs"
+        try context.save()
+
+        try coordinator.mergePendingChanges()
+        try container.mainContext.save()
+        try coordinator.mergePendingChanges()
+
+        let reader = ModelContext(container)
+        let (shared, draft) = try withExtendedLifetime(reader) {
+            let stored = try #require(try reader.fetch(descriptor).first)
+            return (stored.shared, stored.draft)
+        }
+        #expect(shared.size.width == 5)
+        #expect(shared.options == ["theirs": 1])
+        #expect(shared.caption == "theirs")
+        #expect(draft.size.width == 5)
+        #expect(draft.points == [Layout.Point(x: 2, y: 2)])
+        #expect(draft.caption == "ours")
     }
 }
 #endif

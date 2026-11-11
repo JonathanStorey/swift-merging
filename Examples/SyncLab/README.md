@@ -19,11 +19,12 @@ Every stage runs one test for each kind of data:
 - **String**, merged `.byWord`: each editor upper-cases a different word of the title.
 - **[String]**, merged `.byElement`: each editor appends a step.
 - **Codable struct**, merged `.byNode`: a struct with a nested struct, a dictionary and an array of
-  structs. It had an optional and an enum too, until the first runs showed that SwiftData on iOS 18.6 stops
-  the app as soon as a store opens when a Codable property's struct holds either one: "Failed to
-  materialize a keypath" for a `String?`, and "Failed to validate … is not a member of" for a
-  `String`-backed enum. Each editor changes a different part of it, and the test compares it exactly, so
-  anything SwiftData or CloudKit stores differently from what was written shows up.
+  structs. Each editor changes a different part of it, and the test compares it exactly, so anything
+  SwiftData or CloudKit stores differently from what was written shows up.
+- **Codable, clashing edits**, merged `.total(favoring: .theirs)`: the same struct, where each editor changes
+  a part of its own and also sets the caption and height every other editor sets. Every editor's own part
+  must land, and the caption and height must hold one editor's value. Which editor wins depends on the order
+  the merges ran in, so the test accepts any of them and checks separately that every device agrees.
 - **Relationship**, merged `.byMembership`: each editor adds a label.
 - **External storage blob**: one editor replaces a 256 KB blob while the others edit the title.
 
