@@ -195,6 +195,55 @@ tree.forEach { path, node in print(path, node) }    // every node, depth first
 tree.difference(from: original)                     // ["~ age: 30 → 31", "+ tags[2]: \"c\""]
 ```
 
+## SwiftData (experimental)
+
+`MergingSwiftData` merges a SwiftData model property by property when another context, process, or device
+saves the same object. It reads the store's history to see what changed, and takes the base, the values
+before the other side's save, from Core Data's own report of that save as it happens, with a ledger as a
+fallback. CloudKit imports merge against the last version both devices agreed on, which finished exports
+keep current. Needs iOS 18 or macOS 15.
+
+```swift
+import MergingSwiftData
+
+@Model @MergeableModel
+final class Note {
+    @Merge(.byWord) var body = ""                       // edits to different words combine
+    @Merge(.sum) var likes = 0                          // both sides' increments count
+    @Merge(.keep(.theirs)) @Attribute(.externalStorage) var photo: Data?
+    var color = "red"                                   // no @Merge: as SwiftData would
+    @Merge(.byMembership) @Relationship var tags: [Tag] = []
+}
+
+let container = try ModelContainer(for: Note.self)
+try container.enableMerging(Note.self)                  // nothing else to call
+```
+
+`@Merge` takes the same strategies as `@Merged`, and is only for SwiftData models: on anything else it's a
+compile error. `@MergeableModel` writes the model's `MergeableModel` conformance, a snapshot of every stored
+property, since a SwiftData save writes the whole object and a property left out would lose the other
+side's change. Merging is opt-in: a property or relationship without `@Merge` does what SwiftData alone
+would, and only a `@Merge` strategy merges three ways, from the base, ours and theirs. A to-many relationship merges as a set, by
+`.byMembership`, since SwiftData doesn't keep its order. `@Transient` properties are left out.
+
+A property without `@Merge`, or whose strategy can't combine two changes, takes the conflict policy's side.
+The default, `.storeDefault`, keeps what SwiftData would without merging: the main context's save over
+another context's, and a CloudKit import over this device's earlier save, which is CloudKit's server wins.
+`.keepOurs` and `.keepTheirs` choose a side instead.
+
+### CloudKit
+
+CloudKit already merges attribute by attribute, with one gap: when both devices change the same attribute,
+its importer keeps the value of the device that hasn't exported yet and drops the other's, so the two never
+meet in the store. For a `@Merge` attribute that would lose one side's change, so the merge reads the
+other device's value from CloudKit's private database and merges the two, writing the result as this
+device's own edit for the next export. It only asks for records CloudKit itself has mentioned, so a store
+that doesn't sync never calls CloudKit. Exports are confirmed object by object from CloudKit's own sync
+metadata, which tells the merge exactly what the other device has seen.
+
+These safeguards rely on CloudKit's private classes and fields, so the tests include canaries that fail if
+Apple moves them.
+
 ## Requirements
 
 Swift 6.1 (Xcode 16.3) or later. iOS 17, macOS 14, tvOS 17, watchOS 10 and
