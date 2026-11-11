@@ -29,6 +29,7 @@ jobs:
           # Each method's header, then only the calls and strings that answer our questions.
           grep -E "^(CoreData|libsystem|\S+)\`[-+]\[|objc_msgSend\\\$(save:|setMergePolicy:|setTransactionAuthor:|executeRequest:error:|mergeChangesFromRemoteContextSave|refreshObject|setValue:forKey:|changedValues|committedValues|setAutomaticallyMerges|recordChangeTag|serverRecord|setSavePolicy:|setRecordsToSave|modifyRecords|setPerRecordSaveBlock)|Merge|merge|CKErrorServerRecordChanged|Author|author|import|export|CloudKitMirroring|NSBatch" disasm.txt | cut -c1-200 > interesting.txt
           wc -l interesting.txt
+          cat interesting.txt
       - uses: actions/upload-artifact@v4
         with:
           name: mirroring
