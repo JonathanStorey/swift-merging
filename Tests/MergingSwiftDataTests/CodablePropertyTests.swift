@@ -30,6 +30,30 @@ final class Sheet {
     init() {}
 }
 
+/// What SwiftData can't store as a composite attribute: an optional and an enum inside the struct.
+struct Preferences: Codable, Equatable, Sendable {
+    enum Theme: String, Codable, Sendable { case light, dark }
+
+    var theme = Theme.light
+    var nickname: String? = nil
+    var limits: [String: Int] = [:]
+}
+
+/// The same kind of value kept as JSON, which SwiftData stores as one `Data` column.
+@Model @MergeableModel
+final class Profile {
+    @Merge(.json(Preferences.self)) var preferencesJSON: Data = Data()
+
+    var preferences: Preferences {
+        get { JSONDataMerge<Preferences>.decode(preferencesJSON) ?? Preferences() }
+        set { preferencesJSON = JSONDataMerge<Preferences>.encode(newValue) }
+    }
+
+    init() {
+        preferencesJSON = JSONDataMerge<Preferences>.encode(Preferences())
+    }
+}
+
 @MainActor
 @Suite struct CodablePropertyTests {
     @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
@@ -116,6 +140,38 @@ final class Sheet {
         #expect(saved.size.width == 5)
         #expect(saved.options == ["base": 0, "theirs": 1])
         #expect(saved.points == [Layout.Point(x: 2, y: 2)])
+    }
+
+    /// An optional and an enum inside a value kept as JSON survive history reads, and edits to different
+    /// parts combine.
+    @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
+    @Test func aValueKeptAsJSONMergesWithOptionalsAndEnums() throws {
+        let url = FileManager.default.temporaryDirectory.appending(path: "json-\(UUID().uuidString).store")
+        let container = try ModelContainer(for: Profile.self, configurations: ModelConfiguration(url: url))
+        container.mainContext.autosaveEnabled = false
+        let profile = Profile()
+        container.mainContext.insert(profile)
+        try container.mainContext.save()
+        let id = profile.persistentModelID
+        let coordinator = try MergeCoordinator(container: container, types: [Profile.self])
+
+        profile.preferences.theme = .dark
+        let other = ModelContext(container)
+        other.author = "sync"
+        var descriptor = FetchDescriptor<Profile>(predicate: #Predicate { $0.persistentModelID == id })
+        descriptor.fetchLimit = 1
+        let theirs = try #require(try other.fetch(descriptor).first)
+        theirs.preferences.nickname = "theirs"
+        theirs.preferences.limits["daily"] = 3
+        try other.save()
+
+        try coordinator.mergePendingChanges()
+        try container.mainContext.save()
+        try coordinator.mergePendingChanges()
+
+        let reader = ModelContext(container)
+        let saved = try withExtendedLifetime(reader) { try #require(try reader.fetch(descriptor).first).preferences }
+        #expect(saved == Preferences(theme: .dark, nickname: "theirs", limits: ["daily": 3]))
     }
 }
 #endif

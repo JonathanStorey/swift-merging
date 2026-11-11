@@ -40,7 +40,11 @@ enum RuleLab {
         case .strings:
             outcome = judge(Merged(wrappedValue: ours.steps, .byElement).merging(with: theirs.steps), want: two.steps, &failures)
         case .codable:
-            outcome = judge(Merged(wrappedValue: ours.spec, .byNode).merging(with: theirs.spec), want: two.spec, &failures)
+            outcome = judge(Merged(wrappedValue: ours.layout, .byNode).merging(with: theirs.layout), want: two.layout, &failures)
+        case .json:
+            let merged = Merged(wrappedValue: JSONDataMerge<Spec>.encode(ours.spec), .json(Spec.self))
+                .merging(with: JSONDataMerge<Spec>.encode(theirs.spec))
+            outcome = judge(merged.flatMap(JSONDataMerge<Spec>.decode), want: two.spec, &failures)
         case .relationship:
             outcome = judge(Merged(wrappedValue: ours.labels, .byMembership).merging(with: theirs.labels), want: two.labels, &failures)
         case .blob:

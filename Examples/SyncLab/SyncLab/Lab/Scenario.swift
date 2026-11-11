@@ -3,7 +3,7 @@ import SwiftData
 
 /// The kinds of data the lab syncs, one test each per stage.
 enum DataKind: String, CaseIterable, Identifiable, Sendable {
-    case string, strings, codable, relationship, blob
+    case string, strings, codable, json, relationship, blob
 
     var id: String { rawValue }
 
@@ -12,6 +12,7 @@ enum DataKind: String, CaseIterable, Identifiable, Sendable {
         case .string: "String"
         case .strings: "[String]"
         case .codable: "Codable struct"
+        case .json: "Codable as JSON"
         case .relationship: "Relationship"
         case .blob: "External storage blob"
         }
@@ -22,6 +23,7 @@ enum DataKind: String, CaseIterable, Identifiable, Sendable {
         case .string: "textformat"
         case .strings: "list.bullet"
         case .codable: "curlybraces"
+        case .json: "curlybraces.square"
         case .relationship: "link"
         case .blob: "photo.stack"
         }
@@ -32,6 +34,7 @@ enum DataKind: String, CaseIterable, Identifiable, Sendable {
         case .string: "@Merge(.byWord)"
         case .strings: "@Merge(.byElement)"
         case .codable: "@Merge(.byNode)"
+        case .json: "@Merge(.json(Spec.self)) Data"
         case .relationship: "@Merge(.byMembership)"
         case .blob: "@Merge(.keep(.theirs)) @Attribute(.externalStorage)"
         }
@@ -42,7 +45,8 @@ enum DataKind: String, CaseIterable, Identifiable, Sendable {
         switch self {
         case .string: "upper-cases “\(Scenario.titleWord(Scenario.stringWords[editor]))” in the title"
         case .strings: "appends “editor-\(editor)” to the steps"
-        case .codable: ["sets size.width to 5 and adds a caption", "adds options[\"editor-1\"]", "appends a point"][editor]
+        case .codable: ["sets size.width to 5 and a caption", "adds options[\"editor-1\"]", "appends a point"][editor]
+        case .json: ["sets size.width to 5 and the optional caption", "adds options[\"editor-1\"] and sets the enum to .star", "appends a point"][editor]
         case .relationship: "adds the label “editor-\(editor)”"
         case .blob: editor == 0 ? "replaces the 256 KB blob" : "upper-cases “\(Scenario.titleWord(Scenario.blobTitleWords[editor]))” in the title"
         }
@@ -56,6 +60,10 @@ enum DataKind: String, CaseIterable, Identifiable, Sendable {
         case .strings:
             item.steps = item.steps + ["editor-\(editor)"]
         case .codable:
+            var layout = item.layout
+            Scenario.edit(&layout, by: editor)
+            item.layout = layout
+        case .json:
             var spec = item.spec
             Scenario.edit(&spec, by: editor)
             item.spec = spec
@@ -82,6 +90,12 @@ enum DataKind: String, CaseIterable, Identifiable, Sendable {
         case .string: return values.title.split(separator: " ")[Scenario.stringWords[editor]] == edited.title.split(separator: " ")[Scenario.stringWords[editor]]
         case .strings: return values.steps.contains("editor-\(editor)")
         case .codable:
+            switch editor {
+            case 0: return values.layout.size.width == edited.layout.size.width
+            case 1: return values.layout.options["editor-1"] != nil
+            default: return values.layout.points.count > Scenario.baseLayout.points.count
+            }
+        case .json:
             switch editor {
             case 0: return values.spec.size.width == edited.spec.size.width
             case 1: return values.spec.options["editor-1"] != nil
@@ -110,7 +124,8 @@ enum DataKind: String, CaseIterable, Identifiable, Sendable {
         // Two devices may order each other's insertions differently, so the steps are compared as a list of
         // members here, and devices are checked against each other separately.
         if actual.steps.sorted() != want.steps.sorted() { lines.append("steps are \(actual.steps), expected \(want.steps)") }
-        if actual.spec != want.spec { lines.append("spec is \(actual.spec.text), expected \(want.spec.text)") }
+        if actual.layout != want.layout { lines.append("layout is \(jsonText(actual.layout)), expected \(jsonText(want.layout))") }
+        if actual.spec != want.spec { lines.append("spec is \(jsonText(actual.spec)), expected \(jsonText(want.spec))") }
         if actual.labels != want.labels {
             lines.append("labels are \(actual.labels.sorted()), expected \(want.labels.sorted())")
         }
@@ -125,6 +140,7 @@ enum DataKind: String, CaseIterable, Identifiable, Sendable {
 enum Scenario {
     static let baseTitle = "alpha bravo charlie delta echo"
     static let baseSteps = ["one", "two"]
+    static let baseLayout = Layout(options: ["base": 0])
     static let baseSpec = Spec(options: ["base": 0])
     static let baseLabel = "base"
     /// Large enough that SwiftData keeps it in a file beside the store, and CloudKit sends it as an asset.
@@ -151,6 +167,18 @@ enum Scenario {
         return words.joined(separator: " ")
     }
 
+    static func edit(_ layout: inout Layout, by editor: Int) {
+        switch editor {
+        case 0:
+            layout.size.width = 5
+            layout.caption = "from editor 0"
+        case 1:
+            layout.options["editor-1"] = 1
+        default:
+            layout.points.append(Point(x: 2, y: 2))
+        }
+    }
+
     static func edit(_ spec: inout Spec, by editor: Int) {
         switch editor {
         case 0:
@@ -158,8 +186,9 @@ enum Scenario {
             spec.caption = "from editor 0"
         case 1:
             spec.options["editor-1"] = 1
+            spec.shape = .star
         default:
-            spec.points.append(Spec.Point(x: 2, y: 2))
+            spec.points.append(Point(x: 2, y: 2))
         }
     }
 
@@ -167,6 +196,7 @@ enum Scenario {
     @MainActor static func seed(_ item: Item, in context: ModelContext) {
         item.title = baseTitle
         item.steps = baseSteps
+        item.layout = baseLayout
         item.spec = baseSpec
         item.blob = baseBlob
         let label = Tag(name: baseLabel)
@@ -194,13 +224,15 @@ enum Scenario {
 struct ItemValues: Equatable, Sendable {
     var title: String
     var steps: [String]
+    var layout: Layout
     var spec: Spec
     var labels: Set<String>
     var blob: BlobSummary?
 
-    init(title: String, steps: [String], spec: Spec, labels: Set<String>, blob: BlobSummary?) {
+    init(title: String, steps: [String], layout: Layout, spec: Spec, labels: Set<String>, blob: BlobSummary?) {
         self.title = title
         self.steps = steps
+        self.layout = layout
         self.spec = spec
         self.labels = labels
         self.blob = blob
@@ -209,13 +241,14 @@ struct ItemValues: Equatable, Sendable {
     @MainActor init(_ item: Item) {
         title = item.title
         steps = item.steps
+        layout = item.layout
         spec = item.spec
         labels = Set((item.labels ?? []).map(\.name))
         blob = item.blob.map(BlobSummary.init)
     }
 
     var summary: String {
-        "title “\(title)”, steps \(steps), spec \(spec.text), labels \(labels.sorted()), blob \(blob?.description ?? "nil")"
+        "title “\(title)”, steps \(steps), layout \(jsonText(layout)), spec \(jsonText(spec)), labels \(labels.sorted()), blob \(blob?.description ?? "nil")"
     }
 }
 
@@ -243,6 +276,7 @@ struct BlobSummary: Equatable, Sendable, CustomStringConvertible {
 struct Draft {
     var title = Scenario.baseTitle
     var steps = Scenario.baseSteps
+    var layout = Scenario.baseLayout
     var spec = Scenario.baseSpec
     var labels: Set<String> = [Scenario.baseLabel]
     var blob: Data? = Scenario.baseBlob
@@ -252,7 +286,8 @@ struct Draft {
     init(_ snapshot: Item.MergeSnapshot) {
         title = snapshot.title
         steps = snapshot.steps
-        spec = snapshot.spec
+        layout = snapshot.layout
+        spec = JSONDataMerge<Spec>.decode(snapshot.specJSON) ?? Spec()
         labels = snapshot.labels
         blob = snapshot.blob
     }
@@ -261,7 +296,8 @@ struct Draft {
         switch kind {
         case .string: title = Scenario.uppercasing(title, word: Scenario.stringWords[editor])
         case .strings: steps.append("editor-\(editor)")
-        case .codable: Scenario.edit(&spec, by: editor)
+        case .codable: Scenario.edit(&layout, by: editor)
+        case .json: Scenario.edit(&spec, by: editor)
         case .relationship: labels.insert("editor-\(editor)")
         case .blob:
             if editor == 0 {
@@ -273,22 +309,21 @@ struct Draft {
     }
 
     var values: ItemValues {
-        ItemValues(title: title, steps: steps, spec: spec, labels: labels, blob: blob.map(BlobSummary.init))
+        ItemValues(title: title, steps: steps, layout: layout, spec: spec, labels: labels, blob: blob.map(BlobSummary.init))
     }
 
     /// As a snapshot, with each label's name standing in for its object's key.
     var snapshot: Item.MergeSnapshot {
-        Item.MergeSnapshot(key: "rules", title: title, steps: steps, spec: spec, labels: labels, blob: blob)
+        Item.MergeSnapshot(key: "rules", title: title, steps: steps, layout: layout, specJSON: JSONDataMerge<Spec>.encode(spec),
+                           labels: labels, blob: blob)
     }
 }
 
-extension Spec {
-    /// Sorted-key JSON, so two specs read the same way when they're equal.
-    var text: String {
-        let encoder = JSONEncoder()
-        encoder.outputFormatting = [.sortedKeys, .withoutEscapingSlashes]
-        return (try? encoder.encode(self)).map { String(decoding: $0, as: UTF8.self) } ?? "?"
-    }
+/// Sorted-key JSON, so two values read the same way when they're equal.
+func jsonText<Value: Encodable>(_ value: Value) -> String {
+    let encoder = JSONEncoder()
+    encoder.outputFormatting = [.sortedKeys, .withoutEscapingSlashes]
+    return (try? encoder.encode(value)).map { String(decoding: $0, as: UTF8.self) } ?? "?"
 }
 
 struct LabError: LocalizedError {
