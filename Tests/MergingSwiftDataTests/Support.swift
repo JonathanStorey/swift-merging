@@ -10,10 +10,10 @@ final class Note {
     @Merge(.keep(.theirs)) var title: String
     @Merge(.byWord) var body: String
     @Merge(.sum) var likes: Int
-    var steps: [String]
+    @Merge(.byElement) var steps: [String]
     var color = "red"
     @Merge(.keep(.theirs)) @Attribute(.externalStorage) var photo: Data?
-    @Relationship(inverse: \Tag.notes) var tags: [Tag] = []
+    @Merge(.byMembership) @Relationship(inverse: \Tag.notes) var tags: [Tag] = []
     @Relationship var folder: Folder?
 
     init(title: String = "Draft", body: String = "the quick brown fox", likes: Int = 0, steps: [String] = ["prep"]) {
@@ -42,7 +42,7 @@ struct Saved: Equatable {
     var title: String
     var body: String
     var likes: Int
-    var steps: [String]
+    @Merge(.byElement) var steps: [String]
     var color: String
     var photo: Data?
     var tags: Set<String>

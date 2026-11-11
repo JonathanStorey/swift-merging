@@ -53,18 +53,15 @@ public struct MergeableModelMacro: ExtensionMacro {
             }
         }
         let keyPaths = properties.map { "\\\(typeName).\($0.name)" }.joined(separator: ", ")
-        // A property with a strategy merges by it, through `Merged`; the rest keep the side that changed them,
-        // or merge their parts, as a `Codable` value does. A clash the merge can't settle takes `side`.
+        // Merging is opt-in. A property with `@Merge` merges by its strategy, through `Merged`, and one without
+        // keeps the side that changed it. A clash neither settles takes `side`.
         let merges = properties.map { property in
             let name = property.name
-            let fallback = "(side == .ours ? ours.\(name) : theirs.\(name))"
-            if let strategy = property.mergeStrategy {
+            let fallback = "MergingSwiftData.MergeFallback.value(base: base.\(name), ours: ours.\(name), theirs: theirs.\(name), favoring: side)"
+            if let strategy = property.strategy {
                 return "\(name): Merging.Merged(wrappedValue: ours.\(name), \(strategy)).merging(with: theirs.\(name), from: base.\(name)) ?? \(fallback)"
             }
-            let total = { (side: String) in
-                "Merging.CodableTotalMerge<\(property.snapshotType), Merging.\(side)>().merge(base: base.\(name), ours: ours.\(name), theirs: theirs.\(name))"
-            }
-            return "\(name): (side == .ours ? \(total("OursSide")) : \(total("TheirsSide"))) ?? \(fallback)"
+            return "\(name): \(fallback)"
         }
 
         let source = """
@@ -155,13 +152,6 @@ struct StoredProperty {
         case .toMany: "Set<String>"
         case .toOne: "String?"
         }
-    }
-
-    /// The strategy it merges by: its own, or by membership for a to-many relationship.
-    var mergeStrategy: String? {
-        if let strategy { return strategy }
-        if case .toMany = kind { return ".byMembership" }
-        return nil
     }
 
     /// Every stored `var` of a model, except static, computed, and `@Transient` ones. A relationship needs

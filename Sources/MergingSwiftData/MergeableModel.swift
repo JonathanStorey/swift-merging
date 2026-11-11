@@ -64,6 +64,16 @@ extension MergeableModel where MergeSnapshot: Mergeable {
     }
 }
 
+/// What a property without a strategy merges to, or one whose strategy couldn't merge: the side that changed
+/// it, and `side` if both did.
+public enum MergeFallback {
+    public static func value<Value: Equatable>(base: Value, ours: Value, theirs: Value, favoring side: MergeSide) -> Value {
+        if ours == base { return theirs }
+        if theirs == base || ours == theirs { return ours }
+        return side == .ours ? ours : theirs
+    }
+}
+
 /// What a merge does when both sides changed a property and its strategy can't combine them, or the
 /// property has no strategy. Only that property takes a side: every other property still merges.
 public enum MergeConflictPolicy: Sendable {

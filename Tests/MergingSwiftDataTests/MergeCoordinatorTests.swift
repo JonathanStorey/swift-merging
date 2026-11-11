@@ -96,6 +96,18 @@ import Testing
     }
 
     @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
+    @Test func aToOneRelationshipWithoutAStrategyKeepsOursWhenBothChangedIt() throws {
+        let (_, saved) = try merge(ours: { $0.folder = Folder("Home") }, theirs: { $0.folder = Folder("Work") }, policy: .storeDefault)
+        #expect(saved.folder == "Home")
+    }
+
+    @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
+    @Test func aPropertyWithoutAStrategyTakesThePolicysSideWhenBothChangedIt() throws {
+        let (_, saved) = try merge(ours: { $0.color = "green" }, theirs: { $0.color = "blue" }, policy: .keepTheirs)
+        #expect(saved.color == "blue")
+    }
+
+    @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
     @Test func aConflictKeepsOursByDefault() throws {
         let (_, saved) = try merge(ours: { $0.body = "the slow brown fox" }, theirs: { $0.body = "the fast brown fox" })
         #expect(saved.body == "the slow brown fox")
