@@ -195,6 +195,25 @@ tree.forEach { path, node in print(path, node) }    // every node, depth first
 tree.difference(from: original)                     // ["~ age: 30 → 31", "+ tags[2]: \"c\""]
 ```
 
+## SwiftData (experimental)
+
+`MergingSwiftData` merges a SwiftData model property by property when another context, process, or device
+saves the same object while the main context has unsaved edits. It reads the store's history to see what
+the other side changed, keeps each object's base in a ledger since history doesn't record old values, and
+merges with the same strategies as above. Needs iOS 18 or macOS 15.
+
+```swift
+import MergingSwiftData
+
+let container = try ModelContainer(for: Note.self)
+try container.enableMerging(Note.self)          // nothing else to call
+```
+
+A model conforms to `MergeableModel` by naming its merged properties in a `Codable` `Mergeable` snapshot,
+with `@Merged` picking each one's strategy. A macro, `@Merge(.strategy)` on the model's own properties, will
+write that conformance; for now it's written by hand, as in
+[the tests](Tests/MergingSwiftDataTests/Support.swift).
+
 ## Requirements
 
 Swift 6.1 (Xcode 16.3) or later. iOS 17, macOS 14, tvOS 17, watchOS 10 and
