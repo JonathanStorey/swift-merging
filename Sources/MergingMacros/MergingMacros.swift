@@ -29,25 +29,29 @@ public struct MergeableModelMacro: ExtensionMacro {
         let access = model.modifiers.contains { [.keyword(.public), .keyword(.open)].contains($0.name.tokenKind) } ? "public " : ""
         let typeName = type.trimmedDescription
 
-        let fields = properties.map { property in
-            let wrapper = property.strategy.map { "@Merging.Merged(\($0)) " } ?? ""
-            return "\(wrapper)\(access)var \(property.name): \(property.type)"
-        }
+        let fields = properties.map { "\(access)var \($0.name): \($0.type)" }
         let parameters = properties.map { "\($0.name): \($0.type)" }.joined(separator: ", ")
-        let assignments = properties.map { property in
-            if let strategy = property.strategy {
-                "self._\(property.name) = Merging.Merged(wrappedValue: \(property.name), \(strategy))"
-            } else {
-                "self.\(property.name) = \(property.name)"
-            }
-        }
+        let assignments = properties.map { "self.\($0.name) = \($0.name)" }
         let arguments = properties.map { "\($0.name): self.\($0.name)" }.joined(separator: ", ")
         let applies = properties.map { "if self.\($0.name) != snapshot.\($0.name) { self.\($0.name) = snapshot.\($0.name) }" }
         let keyPaths = properties.map { "\\\(typeName).\($0.name)" }.joined(separator: ", ")
+        // A property with a strategy merges by it, through `Merged`; the rest keep the side that changed them,
+        // or merge their parts, as a `Codable` value does. A clash the merge can't settle takes `side`.
+        let merges = properties.map { property in
+            let name = property.name
+            let fallback = "(side == .ours ? ours.\(name) : theirs.\(name))"
+            if let strategy = property.strategy {
+                return "\(name): Merging.Merged(wrappedValue: ours.\(name), \(strategy)).merging(with: theirs.\(name), from: base.\(name)) ?? \(fallback)"
+            }
+            let total = { (side: String) in
+                "Merging.CodableTotalMerge<\(property.type), Merging.\(side)>().merge(base: base.\(name), ours: ours.\(name), theirs: theirs.\(name))"
+            }
+            return "\(name): (side == .ours ? \(total("OursSide")) : \(total("TheirsSide"))) ?? \(fallback)"
+        }
 
         let source = """
         extension \(typeName): MergingSwiftData.MergeableModel {
-            \(access)struct MergeSnapshot: Codable, Equatable, Merging.Mergeable {
+            \(access)struct MergeSnapshot: Codable, Equatable, Sendable {
                 \(fields.joined(separator: "\n        "))
 
                 \(access)init(\(parameters)) {
@@ -65,6 +69,12 @@ public struct MergeableModelMacro: ExtensionMacro {
 
             \(access)static var mergeKeyPaths: [PartialKeyPath<\(typeName)>] {
                 [\(keyPaths)]
+            }
+
+            \(access)static func mergeSnapshots(base: MergeSnapshot, ours: MergeSnapshot, theirs: MergeSnapshot, favoring side: Merging.MergeSide) -> MergeSnapshot {
+                MergeSnapshot(
+                    \(merges.joined(separator: ",\n            "))
+                )
             }
         }
         """

@@ -18,7 +18,7 @@ import SwiftData
 ///
 /// A property's type is taken from its annotation, or from a string, number, or `true`/`false` literal.
 @attached(extension, conformances: MergeableModel,
-          names: named(MergeSnapshot), named(mergeSnapshot), named(applyMergeSnapshot), named(mergeKeyPaths))
+          names: named(MergeSnapshot), named(mergeSnapshot), named(applyMergeSnapshot), named(mergeKeyPaths), named(mergeSnapshots))
 public macro MergeableModel() = #externalMacro(module: "MergingMacros", type: "MergeableModelMacro")
 
 /// Picks how a stored property of a `@MergeableModel` class merges when both sides changed it, with the same

@@ -193,10 +193,7 @@ struct ModelHandler<Model: MergeableModel>: ModelMergeHandler {
             if isTheirs, let base = try base(for: id, in: pass), let mine: Model = pass.main.registeredModel(for: id), mine.hasChanges {
                 let ours = mine.mergeSnapshot
                 // A clash on one property takes the policy's side there and leaves every other merge standing.
-                let merged = switch pass.conflictPolicy {
-                case .keepOurs: CodableTotalMerge<Snapshot, OursSide>().merge(base: base, ours: ours, theirs: theirs) ?? ours
-                case .keepTheirs: CodableTotalMerge<Snapshot, TheirsSide>().merge(base: base, ours: ours, theirs: theirs) ?? theirs
-                }
+                let merged = Model.mergeSnapshots(base: base, ours: ours, theirs: theirs, favoring: pass.conflictPolicy == .keepOurs ? .ours : .theirs)
                 if merged != ours { mine.applyMergeSnapshot(merged) }
             }
             // The store holds theirs until the main context saves the merge, which makes a pass of its own.
