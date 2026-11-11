@@ -73,7 +73,7 @@ import Testing
 
     @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
     @Test func theMacroListsEveryStoredProperty() {
-        #expect(Note.mergeKeyPaths == [\Note.title, \Note.body, \Note.likes, \Note.steps, \Note.color, \Note.photo])
+        #expect(Note.mergeKeyPaths == [\Note.title, \Note.body, \Note.likes, \Note.steps, \Note.color, \Note.photo, \Note.tags, \Note.folder])
     }
 
     @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)

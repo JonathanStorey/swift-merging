@@ -39,7 +39,8 @@ public enum MergeRelationship {
 
     private static func model<Related: PersistentModel>(forKey key: String, in context: ModelContext?) -> Related? {
         guard let context, let id = try? JSONDecoder().decode(PersistentIdentifier.self, from: Data(key.utf8)) else { return nil }
-        if let registered: Related = context.registeredModel(for: id) { return registered }
+        // A decoded identifier doesn't find a registered object, but a fetch by it does, and returns the
+        // context's own instance.
         var descriptor = FetchDescriptor<Related>(predicate: #Predicate { $0.persistentModelID == id })
         descriptor.fetchLimit = 1
         return try? context.fetch(descriptor).first
