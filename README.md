@@ -219,18 +219,6 @@ let container = try ModelContainer(for: Note.self)
 try container.enableMerging(Note.self)                  // nothing else to call
 ```
 
-A `Codable` struct property is stored by SwiftData as one column per field, and SwiftData can't do that
-for a struct holding an optional or an enum. Keep such a value as JSON instead, and merge it field by field
-with `.json(_:)`:
-
-```swift
-@Merge(.json(Settings.self)) var settingsJSON: Data = Data()
-var settings: Settings {
-    get { JSONDataMerge<Settings>.decode(settingsJSON) ?? Settings() }
-    set { settingsJSON = JSONDataMerge<Settings>.encode(newValue) }
-}
-```
-
 `@Merge` takes the same strategies as `@Merged`, and is only for SwiftData models: on anything else it's a
 compile error. `@MergeableModel` writes the model's `MergeableModel` conformance, a snapshot of every stored
 property, since a SwiftData save writes the whole object and a property left out would lose the other
