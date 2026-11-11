@@ -55,6 +55,12 @@ let observer = NotificationCenter.default.addObserver(forName: nil, object: nil,
        let event = note.userInfo?[NSPersistentCloudKitContainer.eventNotificationUserInfoKey] as? NSPersistentCloudKitContainer.Event {
         print("  CLOUDKIT EVENT type=\(event.type.rawValue) succeeded=\(event.succeeded) end=\(String(describing: event.endDate)) error=\(String(describing: event.error))")
     }
+    if name == "NSManagingContextWillSaveChangesNotification" || name == "NSManagedObjectContextWillSaveNotification", let moc = note.object as? NSManagedObjectContext {
+        print("  WILLSAVE moc name=\(moc.name ?? "nil") author=\(moc.transactionAuthor ?? "nil") mergePolicy=\(moc.mergePolicy)")
+        for object in moc.updatedObjects {
+            print("    pending \(object.entity.name ?? "?") changed=\(object.changedValues()) committed=\(object.committedValues(forKeys: nil))")
+        }
+    }
     if name == "NSManagedObjectContextObjectsDidChangeNotification" || name == "NSObjectsChangedInManagingContextNotification" {
         for key in [NSUpdatedObjectsKey, NSInsertedObjectsKey, NSRefreshedObjectsKey] {
             if let objects = note.userInfo?[key] as? Set<NSManagedObject> {
@@ -92,9 +98,20 @@ MainActor.assumeIsolated {
         section("Found Core Data objects")
         for (name, objects) in found { print(name, objects.count, objects.map { "\(type(of: $0))" }) }
 
+        func snapshots(_ label: String) {
+            section("SwiftData snapshots: \(label)")
+            let backing = Mirror(reflecting: item).children.first { $0.label == "_$backingData" }!.value
+            let metadata = Mirror(reflecting: backing).children.first { $0.label == "_metadata" }!.value
+            for child in Mirror(reflecting: metadata).children where (child.label ?? "").contains("Snapshot") {
+                seen.removeAll()
+                walk(child.value, label: child.label!, depth: 0, maxDepth: 6)
+            }
+        }
+        snapshots("after insert and save")
         section("Edit in main (unsaved), then another context saves")
         item.name = "ours"
         item.count = 1
+        snapshots("after our unsaved edit")
         let other = ModelContext(container)
         other.author = "sync"
         let theirs = try other.fetch(FetchDescriptor<Item>()).first!
@@ -102,6 +119,7 @@ MainActor.assumeIsolated {
         theirs.count = 5
         try other.save()
         print("main item after their save: name=\(item.name) count=\(item.count) hasChanges=\(item.hasChanges)")
+        snapshots("after their save")
 
         section("committedValues on Core Data objects found")
         for object in found["NSManagedObject"] ?? [] {
@@ -123,17 +141,25 @@ MainActor.assumeIsolated {
         let check = ModelContext(container)
         let saved = try check.fetch(FetchDescriptor<Item>()).first!
         print("store after main save: name=\(saved.name) count=\(saved.count)")
+        snapshots("after our save")
 
-        section("CloudKit configuration without entitlements")
-        let cloudURL = FileManager.default.temporaryDirectory.appending(path: "probe-cloud-\(UUID().uuidString).store")
-        do {
-            let cloud = try ModelContainer(for: Item.self, configurations: ModelConfiguration(url: cloudURL, cloudKitDatabase: .private("iCloud.com.example.probe")))
-            print("cloud container created")
-            walk(cloud, label: "cloudContainer", depth: 0, maxDepth: 4)
-        } catch {
-            print("cloud container error: \(error)")
+        section("History via the underlying NSPersistentContainer")
+        if let pc = found["NSPersistentContainer"]?.first as? NSPersistentContainer {
+            let ctx = pc.newBackgroundContext()
+            ctx.performAndWait {
+                let request = NSPersistentHistoryChangeRequest.fetchHistory(after: .distantPast)
+                request.resultType = .transactionsAndChanges
+                if let result = try? ctx.execute(request) as? NSPersistentHistoryResult, let txs = result.result as? [NSPersistentHistoryTransaction] {
+                    for tx in txs {
+                        print("tx author=\(tx.author ?? "nil") context=\(tx.contextName ?? "nil")")
+                        for change in tx.changes ?? [] {
+                            print("  change type=\(change.changeType.rawValue) updated=\(change.updatedProperties?.map(\.name) ?? []) tombstone=\(String(describing: change.tombstone))")
+                        }
+                    }
+                }
+                print("history container has viewContext author=\(String(describing: pc.viewContext.transactionAuthor)) mergePolicy=\(pc.viewContext.mergePolicy)")
+            }
         }
-        RunLoop.main.run(until: Date().addingTimeInterval(5))
 
         section("Notification names seen")
         for name in Set(notes.map { $0.split(separator: " ")[1] }).sorted() { print(name) }
