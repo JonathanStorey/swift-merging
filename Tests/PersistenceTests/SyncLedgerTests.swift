@@ -57,12 +57,12 @@ import Testing
         #expect(second.status(ofKey: key) == .pending(since: Date(timeIntervalSinceReferenceDate: 7)))
     }
 
-    @Test func problemsComeFromCloudKitErrors() {
-        #expect(SyncProblem(CKError(.notAuthenticated)) == .notSignedIn)
-        #expect(SyncProblem(CKError(.quotaExceeded)) == .quotaExceeded)
-        #expect(SyncProblem(CKError(.networkUnavailable)) == .networkUnavailable)
-        #expect(SyncProblem(CKError(.zoneBusy)).isTransient)
-        #expect(!SyncProblem(CKError(.quotaExceeded)).isTransient)
+    @Test func errorsComeFromCloudKitErrors() {
+        #expect(SyncError(CKError(.notAuthenticated)) == .notSignedIn)
+        #expect(SyncError(CKError(.quotaExceeded)) == .quotaExceeded)
+        #expect(SyncError(CKError(.networkUnavailable)) == .offline)
+        #expect(SyncError(CKError(.zoneBusy)).isTransient)
+        #expect(!SyncError(CKError(.quotaExceeded)).isTransient)
     }
 }
 #endif

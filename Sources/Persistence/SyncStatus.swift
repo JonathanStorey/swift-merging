@@ -32,14 +32,24 @@ public enum SyncStatus: Sendable, Equatable {
     }
 }
 
-/// Why CloudKit couldn't sync, in terms an app can act on.
-public enum SyncProblem: Error, Sendable, Equatable {
+/// Which way data moves between this device and iCloud.
+public enum SyncDirection: Sendable, Hashable {
+    case upload
+    case download
+}
+
+/// Why CloudKit couldn't sync, or why a wait ended without what it waited for.
+public enum SyncError: Error, Sendable, Equatable {
+    /// The wait's timeout passed first.
+    case timedOut
+    /// The store isn't syncing with CloudKit, so there's nothing to wait for.
+    case notEnabled
     /// No iCloud account is signed in, or it can't be used.
     case notSignedIn
     /// The user's iCloud storage is full.
     case quotaExceeded
-    /// The device is offline or the connection failed.
-    case networkUnavailable
+    /// The device is offline or the connection failed. CloudKit retries on its own.
+    case offline
     /// CloudKit asked to retry later. It retries on its own.
     case serverBusy
     /// Anything else, with the error's description.
@@ -48,24 +58,17 @@ public enum SyncProblem: Error, Sendable, Equatable {
     /// Whether CloudKit retries on its own, so waiting is still worthwhile.
     public var isTransient: Bool {
         switch self {
-        case .networkUnavailable, .serverBusy: true
-        case .notSignedIn, .quotaExceeded, .other: false
+        case .offline, .serverBusy: true
+        default: false
         }
     }
 
-    /// A short description for display.
-    public var message: String {
-        switch self {
-        case .notSignedIn: "Sign in to iCloud to sync."
-        case .quotaExceeded: "iCloud storage is full."
-        case .networkUnavailable: "Offline. Changes will sync when the connection returns."
-        case .serverBusy: "iCloud is busy. Sync will retry shortly."
-        case .other(let description): description
-        }
-    }
-
-    /// The problem an error describes. A partial failure is described by its first item's error.
+    /// The error a CloudKit failure means. A partial failure is described by its first item's error.
     public init(_ error: any Error) {
+        if let error = error as? SyncError {
+            self = error
+            return
+        }
         guard let ckError = error as? CKError else {
             self = .other(error.localizedDescription)
             return
@@ -77,41 +80,33 @@ public enum SyncProblem: Error, Sendable, Equatable {
         switch ckError.code {
         case .notAuthenticated, .accountTemporarilyUnavailable: self = .notSignedIn
         case .quotaExceeded: self = .quotaExceeded
-        case .networkUnavailable, .networkFailure: self = .networkUnavailable
+        case .networkUnavailable, .networkFailure: self = .offline
         case .serviceUnavailable, .requestRateLimited, .zoneBusy: self = .serverBusy
         default: self = .other(ckError.localizedDescription)
         }
     }
 }
 
-/// The iCloud account's state, as CloudKit reports it.
-public enum AccountStatus: Sendable, Equatable {
-    /// Not checked yet, or no CloudKit container is known to check.
-    case unknown
-    case available
-    case noAccount
-    case restricted
-    case temporarilyUnavailable
-    case couldNotDetermine
-
-    init(_ status: CKAccountStatus) {
-        switch status {
-        case .available: self = .available
-        case .noAccount: self = .noAccount
-        case .restricted: self = .restricted
-        case .temporarilyUnavailable: self = .temporarilyUnavailable
-        case .couldNotDetermine: self = .couldNotDetermine
-        @unknown default: self = .couldNotDetermine
+extension SyncError: LocalizedError {
+    public var errorDescription: String? {
+        switch self {
+        case .timedOut: "iCloud didn't confirm in time."
+        case .notEnabled: "iCloud sync isn't on."
+        case .notSignedIn: "Sign in to iCloud to sync."
+        case .quotaExceeded: "iCloud storage is full."
+        case .offline: "Offline. Changes will sync when the connection returns."
+        case .serverBusy: "iCloud is busy. Sync will retry shortly."
+        case .other(let description): description
         }
     }
 }
 
-/// A CloudKit setup, import or export, starting or finishing.
+/// A CloudKit setup, download or upload, starting or finishing.
 public struct SyncEvent: Sendable, Equatable {
     public enum Kind: Sendable, Hashable {
         case setup
-        case `import`
-        case export
+        case download
+        case upload
     }
 
     public var kind: Kind
@@ -120,28 +115,25 @@ public struct SyncEvent: Sendable, Equatable {
     public var endDate: Date?
     public var succeeded: Bool
     /// Why it failed, if it did.
-    public var problem: SyncProblem?
+    public var error: SyncError?
 
-    public init(kind: Kind, startDate: Date, endDate: Date? = nil, succeeded: Bool = false, problem: SyncProblem? = nil) {
+    public init(kind: Kind, startDate: Date, endDate: Date? = nil, succeeded: Bool = false, error: SyncError? = nil) {
         self.kind = kind
         self.startDate = startDate
         self.endDate = endDate
         self.succeeded = succeeded
-        self.problem = problem
+        self.error = error
     }
 
     public var isFinished: Bool { endDate != nil }
 }
 
-/// How a wait for CloudKit ended.
-public enum SyncWaitResult: Sendable, Equatable {
-    /// What it waited for happened.
-    case completed
-    /// CloudKit reported a problem it won't fix by retrying.
-    case failed(SyncProblem)
-    /// Time ran out first. `waiting` is how many objects were still waiting to upload, where that applies.
-    case timedOut(waiting: Int)
-    /// The store isn't syncing with CloudKit, so there was nothing to wait for.
-    case notSyncing
+extension SyncDirection {
+    var eventKind: SyncEvent.Kind {
+        switch self {
+        case .upload: .upload
+        case .download: .download
+        }
+    }
 }
 #endif

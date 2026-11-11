@@ -3,7 +3,12 @@ import CoreData
 import Foundation
 @testable import Persistence
 import SwiftData
+import Observation
 import Testing
+
+final class Changed: @unchecked Sendable {
+    var value = false
+}
 
 /// The ledger reading real saves: SwiftData's, the app's Core Data saves, and rows saved as CloudKit does.
 @Suite struct SaveTrackingTests {
@@ -27,27 +32,45 @@ import Testing
     }
 
     @MainActor
-    @Test func contextSyncReadsTheSharedLedger() throws {
-        SyncTracking.start(defaultsSuite: freshSuite())
+    @Test func aModelsSyncStatusReadsTheSharedLedger() throws {
+        SyncLedger.start(defaultsSuite: freshSuite())
         let fixture = try ModelFixture()
         let context = ModelContext(fixture.container)
         let item = Item("first")
         context.insert(item)
-        #expect(context.sync.status(of: item) == .unsaved)
+        #expect(item.syncStatus == .unsaved)
 
         try context.save()
-        #expect(context.sync.status(of: item) == .localOnly)
+        #expect(item.syncStatus == .localOnly)
 
         SyncLedger.shared.record(cloudStores: [fixture.store])
-        guard case .pending = context.sync.status(of: item) else {
-            Issue.record("Expected pending, got \(context.sync.status(of: item))")
+        guard case .pending = item.syncStatus else {
+            Issue.record("Expected pending, got \(item.syncStatus)")
             return
         }
         item.name = "second"
-        #expect(context.sync.status(of: item) == .unsaved)
-        // One monitor per container, whichever context asks.
+        #expect(item.syncStatus == .unsaved)
+        // One monitor per container, whichever context asks, and it sees the store syncing.
         #expect(context.sync === fixture.container.sync)
         #expect(context.sync.activity == .idle)
+        #expect(context.sync.pending == 1)
+    }
+
+    @MainActor
+    @Test func syncStatusIsObservable() async throws {
+        SyncLedger.start(defaultsSuite: freshSuite())
+        let fixture = try ModelFixture()
+        let context = ModelContext(fixture.container)
+        let item = Item("first")
+        context.insert(item)
+        try context.save()
+
+        let changed = Changed()
+        withObservationTracking { _ = item.syncStatus } onChange: { changed.value = true }
+        SyncLedger.shared.record(cloudStores: [fixture.store])
+        // The signal changes on the main queue, after the ledger does.
+        try await Task.sleep(for: .milliseconds(100))
+        #expect(changed.value)
     }
 
     @Test func cloudKitClearingNeedsUploadMarksTheObjectSynced() throws {

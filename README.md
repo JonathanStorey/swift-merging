@@ -211,39 +211,41 @@ about CloudKit sync: whether it's running, whether an object has reached the ser
 confirmed. It uses public API only. It reads CloudKit's events, the save notifications every Core Data save
 posts, and CloudKit's per-object metadata rows as those saves carry them.
 
-There's one monitor per container, since CloudKit syncs each store on its own and every context on a
-container shares its stores. `container.sync` and `context.sync` are the same object, and `.syncMonitor(for:)` puts it in the SwiftUI environment.
+There's one `@Observable` monitor per container, since CloudKit syncs each store on its own and every context
+on a container shares its stores. `container.sync` and `context.sync` are the same object. Read it at launch,
+which also starts tracking each object's status.
 
 ```swift
 import Persistence
 
-// At launch, so no save goes unseen.
-let container = try ModelContainer(for: Note.self)
-_ = container.sync
+// Watch it. Views already have modelContext, or pass .environment(container.sync) down.
+context.sync.activity       // .off, .idle, .preparing, .uploading, .downloading
+context.sync.pending        // saved objects not yet on the server
+context.sync.error          // SyncError?
+context.sync.account        // CKAccountStatus
+context.sync.lastSynced     // Date?
+for await event in context.sync.events { … }
 
-// The root view puts it in the environment, and any view below reads it.
-ContentView().syncMonitor(for: container)
-@Environment(SyncMonitor.self) private var sync
+// One object, read straight off the model. Views reading it update when it changes.
+note.syncStatus             // .unsaved, .pending(since:), .synced(at:), .localOnly, .unknown
 
-// An iCloud symbol and "Up to date", "Uploading", "3 waiting to upload", or the problem.
-SyncIndicator(sync)
+// Wait. Each throws SyncError (.timedOut, .notEnabled, .notSignedIn, .quotaExceeded, …) and takes a timeout.
+try await context.save(waitingFor: .upload)     // save, then wait until the server confirms it
+try await context.sync.wait(for: note)          // one object
+try await context.sync.wait(for: [note, tag])   // several
+try await context.sync.wait(for: .upload)       // the next upload
+try await context.sync.wait(for: .download)     // the next download
+try await context.sync.wait()                   // everything pending is up, then a fresh download
 
-// Or from a context, as views already have one.
-context.sync.activity                     // .idle, .settingUp, .importing, .exporting
-context.sync.status(of: note)             // .unsaved, .pending(since:), .synced(at:), .localOnly, .unknown
-
-// "Sync now", as far as public API goes: save, which starts an upload, then wait for CloudKit to confirm it.
-let result = try await context.saveAndWaitForUpload(timeout: .seconds(30))   // .completed, .timedOut, .failed, .notSyncing
+// Show it.
+Label(context.sync)         // iCloud symbol and "Up to date", "Uploading", "3 pending", or the error
+Image(note.syncStatus)
 ```
 
-`SyncMonitor` is `@Observable` and shows the activity, the last import and export, the latest problem (not
-signed in, storage full, offline, busy), the iCloud account status, and how many objects are waiting to
-upload. A view reading `status(of:)` updates when that object's status changes. `waitForExport(startedAfter:)`,
-`waitForImport()` and `waitForSync()` wait for CloudKit's own events. There's no public way to start an
-import, so `waitForImport` returns when CloudKit next imports, at launch, on returning to the foreground, or on
-a push.
+There's no public way to start a sync. A save starts an upload, which is why `save(waitingFor:)` is as close
+to "sync now" as an App Store app can get. CloudKit downloads at launch, on returning to the foreground, and
+on a push, so `wait(for: .download)` can time out when nothing changed.
 
-Each object's state is kept by its Core Data URI in `UserDefaults`, so it survives a relaunch.
-`SyncTracking.start(defaultsSuite:)` picks another suite, such as an App Group's. An object no save or sync has
-touched since tracking started reads `.unknown`, and a store CloudKit hasn't been seen syncing reads
-`.localOnly`.
+Each object's state is kept by its Core Data URI in `UserDefaults`, so it survives a relaunch. An object no
+save or sync has touched since tracking started reads `.unknown`, and a store CloudKit hasn't been seen syncing
+reads `.localOnly`.

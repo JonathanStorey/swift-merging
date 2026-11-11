@@ -1,6 +1,7 @@
 #if canImport(SwiftData)
 import CoreData
 import Foundation
+import Observation
 import SwiftData
 
 /// Each object's sync state, kept by its Core Data URI and saved to `UserDefaults` so it survives a relaunch.
@@ -39,6 +40,8 @@ final class SyncLedger: @unchecked Sendable {
     private let defaultsKey: String
     private let persistsChanges: Bool
     private var observers: [any NSObjectProtocol] = []
+    /// Changes on the main thread after the ledger does, so views reading `syncStatus` update.
+    let signal = LedgerSignal()
 
     /// A ledger saved under `defaultsKey` in the `UserDefaults` suite `defaultsSuite`, or the standard
     /// defaults, or not saved at all when `persists` is `false`.
@@ -135,6 +138,8 @@ final class SyncLedger: @unchecked Sendable {
             Self.defaults(defaultsSuite)?.set(data, forKey: defaultsKey)
         }
         NotificationCenter.default.post(name: Self.didChange, object: self)
+        let signal = signal
+        DispatchQueue.main.async { signal.bump() }
     }
 
     // MARK: - Observing
@@ -195,13 +200,36 @@ final class SyncLedger: @unchecked Sendable {
     }
 }
 
-/// Tracking every object's sync state, which `SyncMonitor.status(of:)` reads.
-public enum SyncTracking {
-    /// Starts tracking, saving what it learns in the `UserDefaults` suite named `defaultsSuite`, such as an
-    /// App Group's, or the standard defaults. Call it once at launch, before the first save, so no change
-    /// goes unseen. Getting a container's `sync` monitor starts it too, with the standard defaults.
-    public static func start(defaultsSuite: String? = nil) {
-        SyncLedger.start(defaultsSuite: defaultsSuite)
+/// An observable counter, so SwiftUI tracks reads of `syncStatus`, which come from any thread.
+final class LedgerSignal: Observable, @unchecked Sendable {
+    private let registrar = ObservationRegistrar()
+    private let lock = NSLock()
+    private var _revision = 0
+
+    var revision: Int {
+        registrar.access(self, keyPath: \.revision)
+        return lock.synchronized { _revision }
+    }
+
+    func bump() {
+        registrar.withMutation(of: self, keyPath: \.revision) {
+            lock.synchronized { _revision &+= 1 }
+        }
+    }
+}
+
+extension PersistentModel {
+    /// Where this object stands with iCloud, as far as this device has seen since tracking started. A view
+    /// that reads it updates when it changes.
+    ///
+    /// Tracking starts the first time any container's `sync` is read, so read it at launch. An object no
+    /// save or sync has touched since then reads `.unknown`.
+    public var syncStatus: SyncStatus {
+        let ledger = SyncLedger.shared
+        _ = ledger.signal.revision
+        if hasChanges { return .unsaved }
+        guard let key = StoreRecords.key(of: persistentModelID) else { return .unknown }
+        return ledger.status(ofKey: key)
     }
 }
 #endif

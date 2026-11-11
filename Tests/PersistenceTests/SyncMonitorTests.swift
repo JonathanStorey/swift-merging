@@ -16,86 +16,104 @@ import Testing
     }
 
     @Test func activityFollowsRunningEvents() {
-        #expect(monitor.activity == .idle)
-        #expect(!monitor.isSyncing)
+        #expect(monitor.activity == .off)
 
-        let exportID = UUID(), importID = UUID()
+        let uploadID = UUID(), downloadID = UUID()
         let start = Date.now
-        monitor.record(SyncEvent(kind: .import, startDate: start), id: importID, store: fixture.store)
-        #expect(monitor.activity == .importing)
-        #expect(monitor.isSyncing)
-        monitor.record(SyncEvent(kind: .export, startDate: start), id: exportID, store: fixture.store)
-        #expect(monitor.activity == .exporting)
+        monitor.record(SyncEvent(kind: .download, startDate: start), id: downloadID, store: fixture.store)
+        #expect(monitor.activity == .downloading)
+        monitor.record(SyncEvent(kind: .upload, startDate: start), id: uploadID, store: fixture.store)
+        #expect(monitor.activity == .uploading)
 
         let end = start.addingTimeInterval(1)
-        monitor.record(SyncEvent(kind: .export, startDate: start, endDate: end, succeeded: true), id: exportID, store: fixture.store)
-        #expect(monitor.activity == .importing)
-        #expect(monitor.lastExport == end)
-        monitor.record(SyncEvent(kind: .import, startDate: start, endDate: end, succeeded: true), id: importID, store: fixture.store)
+        monitor.record(SyncEvent(kind: .upload, startDate: start, endDate: end, succeeded: true), id: uploadID, store: fixture.store)
+        #expect(monitor.activity == .downloading)
+        #expect(monitor.lastSynced == end)
+        let later = end.addingTimeInterval(1)
+        monitor.record(SyncEvent(kind: .download, startDate: start, endDate: later, succeeded: true), id: downloadID, store: fixture.store)
         #expect(monitor.activity == .idle)
-        #expect(monitor.lastImport == end)
+        #expect(monitor.lastSynced == later)
     }
 
     @Test func otherStoresAreIgnored() {
-        monitor.record(SyncEvent(kind: .import, startDate: .now), id: UUID(), store: "another store")
-        #expect(monitor.activity == .idle)
+        monitor.record(SyncEvent(kind: .download, startDate: .now), id: UUID(), store: "another store")
+        #expect(monitor.activity == .off)
     }
 
-    @Test func aProblemLastsUntilTheSameKindSucceeds() {
+    @Test func anErrorLastsUntilTheSameKindSucceeds() {
         let start = Date.now
-        monitor.record(SyncEvent(kind: .export, startDate: start, endDate: start, problem: .quotaExceeded), id: UUID(), store: fixture.store)
-        #expect(monitor.problem == .quotaExceeded)
-        monitor.record(SyncEvent(kind: .import, startDate: start, endDate: start, succeeded: true), id: UUID(), store: fixture.store)
-        #expect(monitor.problem == .quotaExceeded)
-        monitor.record(SyncEvent(kind: .export, startDate: start, endDate: start, succeeded: true), id: UUID(), store: fixture.store)
-        #expect(monitor.problem == nil)
+        monitor.record(SyncEvent(kind: .upload, startDate: start, endDate: start, error: .quotaExceeded), id: UUID(), store: fixture.store)
+        #expect(monitor.error == .quotaExceeded)
+        monitor.record(SyncEvent(kind: .download, startDate: start, endDate: start, succeeded: true), id: UUID(), store: fixture.store)
+        #expect(monitor.error == .quotaExceeded)
+        monitor.record(SyncEvent(kind: .upload, startDate: start, endDate: start, succeeded: true), id: UUID(), store: fixture.store)
+        #expect(monitor.error == nil)
     }
 
-    @Test func waitForExportReturnsWhenALaterExportFinishes() async {
-        let saved = Date.now
-        let monitor = monitor, fixture = fixture
+    @Test func eventsStreamAsTheyHappen() async {
+        let stream = monitor.events
+        let event = SyncEvent(kind: .download, startDate: .now)
+        monitor.record(event, id: UUID(), store: fixture.store)
+        var iterator = stream.makeAsyncIterator()
+        #expect(await iterator.next() == event)
+    }
+
+    @Test func waitingForAnUploadReturnsWhenALaterOneFinishes() async throws {
+        let monitor = monitor, store = fixture.store
         Task { @MainActor in
             try? await Task.sleep(for: .milliseconds(300))
-            monitor.record(SyncEvent(kind: .export, startDate: .now, endDate: .now, succeeded: true), id: UUID(), store: fixture.store)
+            monitor.record(SyncEvent(kind: .upload, startDate: .now, endDate: .now, succeeded: true), id: UUID(), store: store)
         }
-        #expect(await monitor.waitForExport(startedAfter: saved, timeout: .seconds(5)) == .completed)
+        try await monitor.wait(for: .upload, timeout: .seconds(5))
     }
 
-    @Test func waitForExportIgnoresAnExportThatStartedBeforeTheSave() async {
-        let before = Date.now
-        let saved = before.addingTimeInterval(1)
-        monitor.record(SyncEvent(kind: .export, startDate: before, endDate: saved, succeeded: true), id: UUID(), store: fixture.store)
-        #expect(await monitor.waitForExport(startedAfter: saved, timeout: .milliseconds(300)) == .timedOut(waiting: 0))
+    @Test func waitingForAnUploadIgnoresOneThatStartedEarlier() async {
+        let before = Date.now.addingTimeInterval(-1)
+        monitor.record(SyncEvent(kind: .upload, startDate: before, endDate: .now, succeeded: true), id: UUID(), store: fixture.store)
+        await #expect(throws: SyncError.timedOut) {
+            try await monitor.wait(for: .upload, timeout: .milliseconds(300))
+        }
     }
 
-    @Test func waitForExportStopsOnALastingFailure() async {
-        let saved = Date.now
-        monitor.record(SyncEvent(kind: .export, startDate: saved, endDate: saved, problem: .notSignedIn), id: UUID(), store: fixture.store)
-        #expect(await monitor.waitForExport(startedAfter: saved, timeout: .seconds(5)) == .failed(.notSignedIn))
+    @Test func waitingStopsOnALastingFailure() async {
+        let monitor = monitor, store = fixture.store
+        Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(100))
+            monitor.record(SyncEvent(kind: .upload, startDate: .now, endDate: .now, error: .notSignedIn), id: UUID(), store: store)
+        }
+        await #expect(throws: SyncError.notSignedIn) {
+            try await monitor.wait(for: .upload, timeout: .seconds(5))
+        }
     }
 
-    @Test func waitForUploadReturnsOnceEveryObjectIsConfirmed() async {
+    @Test func waitingForObjectsReturnsOnceEachIsConfirmed() async throws {
         let key = "x-coredata://\(fixture.store)/Item/p1"
-        let saved = Date.now
-        ledger.record(changed: [key], cloudStores: [fixture.store], at: saved)
+        ledger.record(changed: [key], cloudStores: [fixture.store])
         let ledger = ledger
         Task { @MainActor in
             try? await Task.sleep(for: .milliseconds(300))
             ledger.record(confirmed: [key])
         }
-        #expect(await monitor.waitForUpload(ofKeys: [key], savedAt: saved, timeout: .seconds(5)) == .completed)
+        try await monitor.wait(forKeys: [key], savedAt: nil, timeout: .seconds(5))
     }
 
-    @Test func waitForUploadTimesOutWithWhatsWaiting() async {
+    @Test func waitingForObjectsTimesOut() async {
         let key = "x-coredata://\(fixture.store)/Item/p1"
         ledger.record(changed: [key], cloudStores: [fixture.store])
-        #expect(await monitor.waitForUpload(ofKeys: [key], savedAt: .now, timeout: .milliseconds(300)) == .timedOut(waiting: 1))
+        await #expect(throws: SyncError.timedOut) {
+            try await monitor.wait(forKeys: [key], savedAt: nil, timeout: .milliseconds(300))
+        }
     }
 
-    @Test func waitForUploadOfALocalStoreIsNotSyncing() async {
+    @Test func waitingOnALocalStoreIsNotEnabled() async {
         let key = "x-coredata://\(fixture.store)/Item/p1"
         ledger.record(changed: [key])
-        #expect(await monitor.waitForUpload(ofKeys: [key], savedAt: .now, timeout: .milliseconds(300)) == .notSyncing)
+        await #expect(throws: SyncError.notEnabled) {
+            try await monitor.wait(forKeys: [key], savedAt: nil, timeout: .milliseconds(300))
+        }
+        await #expect(throws: SyncError.notEnabled) {
+            try await monitor.wait()
+        }
     }
 }
 #endif

@@ -5,176 +5,154 @@ import Foundation
 import Observation
 import SwiftData
 
-/// What CloudKit is doing for one container's stores, for views to watch.
+/// What CloudKit is doing for one container's stores, for views to watch and code to wait on.
+///
+/// There's one per container, since CloudKit syncs each store on its own and every context on a container
+/// shares its stores: `container.sync` and `context.sync` are the same object. Read it at launch, which
+/// also starts tracking each object's `syncStatus`.
 ///
 /// It listens to `NSPersistentCloudKitContainer.eventChangedNotification`, which CloudKit posts for SwiftData
 /// stores too, and to the iCloud account. There's no public way to start a sync, so it offers the honest
-/// alternatives: a save starts an export, and the `wait` methods return once CloudKit confirms the work.
-///
-/// There's one per container, since sync happens per store and every context on a container shares its
-/// stores. Get it from `container.sync` or `context.sync`, which are the same object, or from the SwiftUI
-/// environment with `@Environment(SyncMonitor.self)` after `.syncMonitor(for:)`.
+/// alternative: a save starts an upload, and `wait(for:)` returns once CloudKit confirms it.
 @MainActor
 @Observable
 public final class SyncMonitor {
-    /// What CloudKit is busy with.
-    public enum Activity: Sendable, Equatable {
+    /// What CloudKit is doing.
+    public enum Activity: Sendable, Hashable {
+        /// CloudKit hasn't been seen syncing these stores.
+        case off
         case idle
-        case settingUp
-        case importing
-        case exporting
+        case preparing
+        case downloading
+        case uploading
     }
 
     public let container: ModelContainer
 
-    /// What CloudKit is doing now. An export shows over an import when both are running.
-    public private(set) var activity: Activity = .idle
-    /// When an import last finished successfully.
-    public private(set) var lastImport: Date?
-    /// When an export last finished successfully.
-    public private(set) var lastExport: Date?
-    /// The latest problem, until the same kind of work next succeeds.
-    public private(set) var problem: SyncProblem?
-    /// The iCloud account's state, when a CloudKit container is known.
-    public private(set) var accountStatus: AccountStatus = .unknown
-    /// How many objects are saved but not yet confirmed uploaded.
-    public private(set) var pendingUploadCount = 0
-    /// Whether CloudKit has been seen syncing these stores, in this launch or an earlier one.
-    public private(set) var isSyncing = false
-    /// The latest finished events, newest last, up to 50.
-    public private(set) var recentEvents: [SyncEvent] = []
-    /// Bumped whenever any object's status changes, so a view reading `status(of:)` updates.
-    private(set) var revision = 0
+    /// What CloudKit is doing now. An upload shows over a download when both are running.
+    public private(set) var activity: Activity = .off
+    /// How many saved objects the server hasn't confirmed yet.
+    public private(set) var pending = 0
+    /// The latest failure, until the same kind of work next succeeds.
+    public private(set) var error: SyncError?
+    /// The iCloud account's state. It reads `.couldNotDetermine` until checked, or when no CloudKit
+    /// container is known to check.
+    public private(set) var account: CKAccountStatus = .couldNotDetermine
+    /// When an upload or download last finished successfully.
+    public private(set) var lastSynced: Date?
 
-    /// The CloudKit container whose account status it checks.
-    public let cloudKitContainerIdentifier: String?
-
-    @ObservationIgnored private var running: [UUID: SyncEvent.Kind] = [:]
-    @ObservationIgnored private var problemKind: SyncEvent.Kind?
-    @ObservationIgnored private var storeIdentifiers: Set<String> = []
-    @ObservationIgnored private let ledger: SyncLedger
-    @ObservationIgnored private let observers = ObserverTokens()
-
-    /// A monitor of `container`'s stores, which checks the account of `cloudKitContainerIdentifier`, or of
-    /// the first container its configurations name.
-    public init(container: ModelContainer, cloudKitContainerIdentifier: String? = nil) {
-        self.container = container
-        self.cloudKitContainerIdentifier = cloudKitContainerIdentifier
-            ?? container.configurations.compactMap(\.cloudKitContainerIdentifier).sorted().first
-        ledger = .shared
-        refreshStoreIdentifiers()
-        refreshFromLedger()
-        startObserving()
-        refreshAccountStatus()
+    /// Every CloudKit event for these stores from now on, as it starts and finishes.
+    public var events: AsyncStream<SyncEvent> {
+        let (stream, continuation) = AsyncStream.makeStream(of: SyncEvent.self)
+        let id = UUID()
+        continuations[id] = continuation
+        continuation.onTermination = { [weak self] _ in
+            let monitor = self
+            Task { @MainActor in monitor?.continuations[id] = nil }
+        }
+        return stream
     }
 
-    init(container: ModelContainer, ledger: SyncLedger, observes: Bool) {
+    @ObservationIgnored private var isEnabled = false
+    @ObservationIgnored private var running: [UUID: SyncEvent.Kind] = [:]
+    @ObservationIgnored private var errorKind: SyncEvent.Kind?
+    @ObservationIgnored private(set) var finished: [SyncEvent] = []
+    @ObservationIgnored private var continuations: [UUID: AsyncStream<SyncEvent>.Continuation] = [:]
+    @ObservationIgnored private var storeIdentifiers: Set<String> = []
+    private let cloudKitContainerIdentifier: String?
+    private let ledger: SyncLedger
+    private let observers = ObserverTokens()
+
+    init(container: ModelContainer, ledger: SyncLedger = .shared, observes: Bool = true) {
         self.container = container
-        cloudKitContainerIdentifier = nil
         self.ledger = ledger
+        cloudKitContainerIdentifier = observes
+            ? container.configurations.compactMap(\.cloudKitContainerIdentifier).sorted().first : nil
         refreshStoreIdentifiers()
         refreshFromLedger()
         if observes { startObserving() }
-    }
-
-    // MARK: - Objects
-
-    /// Where `model` stands with iCloud: unsaved, waiting to upload, or synced, as far as this device has
-    /// seen since tracking started. A view that reads it updates when it changes.
-    ///
-    /// Tracking starts with `SyncTracking.start()` or the first monitor, so start it at launch. An object no
-    /// save or sync has touched since then reads `.unknown`.
-    public func status(of model: some PersistentModel) -> SyncStatus {
-        _ = revision
-        return Self.status(of: model, in: ledger)
-    }
-
-    /// Whether the server has every one of `models` as this device last saved it.
-    public func isSynced(_ models: [any PersistentModel]) -> Bool {
-        models.allSatisfy { status(of: $0).isSynced }
-    }
-
-    nonisolated static func status(of model: some PersistentModel, in ledger: SyncLedger) -> SyncStatus {
-        if model.hasChanges { return .unsaved }
-        guard let key = StoreRecords.key(of: model.persistentModelID) else { return .unknown }
-        return ledger.status(ofKey: key)
+        refreshAccount()
     }
 
     // MARK: - Waiting
 
-    /// Waits for an export that starts after `date` to finish. A save starts one if it changed anything that
-    /// syncs, so call it just after saving, passing a date from just before.
-    public func waitForExport(startedAfter date: Date, timeout: Duration = .seconds(30)) async -> SyncWaitResult {
-        await waitForEvent(.export, timeout: timeout) { $0.startDate >= date }
+    /// Waits until the server has `model` as this device last saved it.
+    public func wait(for model: some PersistentModel, timeout: Duration = .seconds(60)) async throws {
+        try await wait(for: [model], timeout: timeout)
     }
 
-    /// Waits for an import to finish after `date`. CloudKit imports when the app launches or comes to the
-    /// foreground, and when a push says the server changed, so this can time out when nothing changed.
-    public func waitForImport(finishedAfter date: Date = .now, timeout: Duration = .seconds(30)) async -> SyncWaitResult {
-        await waitForEvent(.import, timeout: timeout) { ($0.endDate ?? .distantPast) >= date }
+    /// Waits until the server has every one of `models` as this device last saved them.
+    public func wait(for models: [any PersistentModel], timeout: Duration = .seconds(60)) async throws {
+        let keys = models.compactMap { StoreRecords.key(of: $0.persistentModelID) }
+        try await wait(forKeys: keys, savedAt: nil, timeout: timeout)
     }
 
-    /// Waits for every object waiting to upload to be confirmed, then for an import to finish, so this
-    /// device has sent what it has and taken what the server had at the time.
-    public func waitForSync(timeout: Duration = .seconds(60)) async -> SyncWaitResult {
+    /// Waits for the next upload or download to finish. An upload must start after the call, since one
+    /// already running may not carry what was just saved. CloudKit downloads at launch, on returning to
+    /// the foreground, and on a push, so a download wait can time out when nothing changed.
+    public func wait(for direction: SyncDirection, timeout: Duration = .seconds(60)) async throws {
+        try await wait(for: direction, after: .now, timeout: timeout)
+    }
+
+    /// Waits until everything waiting to upload is confirmed, then for a download to finish, so this
+    /// device has sent what it has and taken what the server had.
+    public func wait(timeout: Duration = .seconds(60)) async throws {
         let start = Date.now
-        let clock = ContinuousClock()
-        let deadline = clock.now.advanced(by: timeout)
-        guard isSyncing else { return .notSyncing }
+        let deadline = ContinuousClock.now.advanced(by: timeout)
+        guard isEnabled else { throw SyncError.notEnabled }
         while ledger.pendingCount(inStores: storeIdentifiers) > 0 {
-            if let failure = lastingFailure(.export, since: start) { return .failed(failure) }
-            guard clock.now < deadline, await pause() else {
-                return .timedOut(waiting: ledger.pendingCount(inStores: storeIdentifiers))
+            if let failure = lastingFailure(.upload, since: start) { throw failure }
+            try await pause(until: deadline)
+        }
+        try await wait(for: .download, after: start, timeout: ContinuousClock.now.duration(to: deadline))
+    }
+
+    func wait(for direction: SyncDirection, after date: Date, timeout: Duration) async throws {
+        let deadline = ContinuousClock.now.advanced(by: timeout)
+        let kind = direction.eventKind
+        while true {
+            for event in finished where event.kind == kind {
+                let matches = direction == .upload ? event.startDate >= date : (event.endDate ?? .distantPast) >= date
+                guard matches else { continue }
+                if event.succeeded { return }
+                if let error = event.error, !error.isTransient { throw error }
+            }
+            do {
+                try await pause(until: deadline)
+            } catch SyncError.timedOut where !isEnabled {
+                throw SyncError.notEnabled
             }
         }
-        return await waitForImport(finishedAfter: start, timeout: clock.now.duration(to: deadline))
     }
 
-    /// Waits until CloudKit confirms the server has each of `models` as saved at `date` or later.
-    public func waitForUpload(of models: [any PersistentModel], savedAt date: Date,
-                              timeout: Duration = .seconds(60)) async -> SyncWaitResult {
-        let keys = models.compactMap { StoreRecords.key(of: $0.persistentModelID) }
-        return await waitForUpload(ofKeys: keys, savedAt: date, timeout: timeout)
-    }
-
-    func waitForUpload(ofKeys keys: [String], savedAt date: Date, timeout: Duration) async -> SyncWaitResult {
-        let clock = ContinuousClock()
-        let deadline = clock.now.advanced(by: timeout)
+    /// Waits until each object is synced, at `savedAt` or later when given.
+    func wait(forKeys keys: [String], savedAt date: Date?, timeout: Duration) async throws {
+        let deadline = ContinuousClock.now.advanced(by: timeout)
+        let since = date ?? .now
         while true {
-            let statuses = keys.map(ledger.status(ofKey:))
-            let waiting = statuses.filter { status in
-                if case .synced(let at) = status { return at < date }
+            let waiting = keys.map(ledger.status(ofKey:)).filter { status in
+                if case .synced(let at) = status { return date.map { at < $0 } ?? false }
                 return true
             }
-            if waiting.isEmpty { return .completed }
-            if let failure = lastingFailure(.export, since: date) { return .failed(failure) }
-            guard clock.now < deadline, await pause() else {
-                return waiting.allSatisfy { $0 == .localOnly } ? .notSyncing : .timedOut(waiting: waiting.count)
+            if waiting.isEmpty { return }
+            if let failure = lastingFailure(.upload, since: since) { throw failure }
+            do {
+                try await pause(until: deadline)
+            } catch SyncError.timedOut where waiting.allSatisfy({ $0 == .localOnly }) {
+                throw SyncError.notEnabled
             }
-        }
-    }
-
-    private func waitForEvent(_ kind: SyncEvent.Kind, timeout: Duration, where matches: (SyncEvent) -> Bool) async -> SyncWaitResult {
-        let clock = ContinuousClock()
-        let deadline = clock.now.advanced(by: timeout)
-        while true {
-            for event in recentEvents where event.kind == kind && matches(event) {
-                if event.succeeded { return .completed }
-                if let problem = event.problem, !problem.isTransient { return .failed(problem) }
-            }
-            guard clock.now < deadline, await pause() else { return isSyncing ? .timedOut(waiting: 0) : .notSyncing }
         }
     }
 
     /// A failure of `kind` since `date` that CloudKit won't fix by retrying.
-    private func lastingFailure(_ kind: SyncEvent.Kind, since date: Date) -> SyncProblem? {
-        recentEvents.last { $0.kind == kind && $0.startDate >= date && !$0.succeeded && $0.problem?.isTransient == false }?.problem
+    private func lastingFailure(_ kind: SyncEvent.Kind, since date: Date) -> SyncError? {
+        finished.last { $0.kind == kind && $0.startDate >= date && !$0.succeeded && $0.error?.isTransient == false }?.error
     }
 
-    /// Sleeps briefly, returning `false` if the task was cancelled.
-    private func pause() async -> Bool {
-        try? await Task.sleep(for: .milliseconds(200))
-        return !Task.isCancelled
+    /// Sleeps briefly, throwing `SyncError.timedOut` past `deadline`, or `CancellationError`.
+    private func pause(until deadline: ContinuousClock.Instant) async throws {
+        guard ContinuousClock.now < deadline else { throw SyncError.timedOut }
+        try await Task.sleep(for: .milliseconds(200))
     }
 
     // MARK: - Events
@@ -183,56 +161,55 @@ public final class SyncMonitor {
     func record(_ event: SyncEvent, id: UUID, store: String) {
         if storeIdentifiers.isEmpty { refreshStoreIdentifiers() }
         guard storeIdentifiers.isEmpty || storeIdentifiers.contains(store) else { return }
-        isSyncing = true
+        isEnabled = true
         if event.isFinished {
             running[id] = nil
-            recentEvents.append(event)
-            if recentEvents.count > 50 { recentEvents.removeFirst(recentEvents.count - 50) }
+            finished.append(event)
+            if finished.count > 100 { finished.removeFirst(finished.count - 100) }
             if event.succeeded {
-                switch event.kind {
-                case .import: lastImport = event.endDate
-                case .export: lastExport = event.endDate
-                case .setup: break
+                if event.kind != .setup, let end = event.endDate, end > lastSynced ?? .distantPast { lastSynced = end }
+                if errorKind == event.kind {
+                    error = nil
+                    errorKind = nil
                 }
-                if problemKind == event.kind {
-                    problem = nil
-                    problemKind = nil
-                }
-            } else if let eventProblem = event.problem {
-                problem = eventProblem
-                problemKind = event.kind
-                if eventProblem == .notSignedIn { refreshAccountStatus() }
+            } else if let eventError = event.error {
+                error = eventError
+                errorKind = event.kind
+                if eventError == .notSignedIn { refreshAccount() }
             }
         } else {
             running[id] = event.kind
         }
-        let kinds = Set(running.values)
-        activity = kinds.contains(.export) ? .exporting : kinds.contains(.import) ? .importing
-            : kinds.contains(.setup) ? .settingUp : .idle
+        for continuation in continuations.values { continuation.yield(event) }
+        refreshActivity()
         refreshFromLedger()
     }
 
+    private func refreshActivity() {
+        let kinds = Set(running.values)
+        let new: Activity = !isEnabled ? .off : kinds.contains(.upload) ? .uploading : kinds.contains(.download) ? .downloading
+            : kinds.contains(.setup) ? .preparing : .idle
+        if activity != new { activity = new }
+    }
+
     private func refreshFromLedger() {
-        revision &+= 1
         let count = ledger.pendingCount(inStores: storeIdentifiers)
-        if pendingUploadCount != count { pendingUploadCount = count }
-        if !isSyncing, storeIdentifiers.contains(where: ledger.isCloudStore) { isSyncing = true }
+        if pending != count { pending = count }
+        if !isEnabled, storeIdentifiers.contains(where: ledger.isCloudStore) {
+            isEnabled = true
+            refreshActivity()
+        }
     }
 
     private func refreshStoreIdentifiers() {
         storeIdentifiers = Set(container.configurations.compactMap { StoreRecords.storeIdentifier(at: $0.url) })
     }
 
-    private func refreshAccountStatus() {
+    private func refreshAccount() {
         guard let identifier = cloudKitContainerIdentifier else { return }
         Task { [weak self] in
-            let status: AccountStatus
-            do {
-                status = AccountStatus(try await CKContainer(identifier: identifier).accountStatus())
-            } catch {
-                status = .couldNotDetermine
-            }
-            self?.accountStatus = status
+            let status = (try? await CKContainer(identifier: identifier).accountStatus()) ?? .couldNotDetermine
+            self?.account = status
         }
     }
 
@@ -251,7 +228,7 @@ public final class SyncMonitor {
         })
         observers.add(center.addObserver(forName: .CKAccountChanged, object: nil, queue: nil) { [weak self] _ in
             let monitor = self
-            Task { @MainActor in monitor?.refreshAccountStatus() }
+            Task { @MainActor in monitor?.refreshAccount() }
         })
     }
 }
@@ -261,14 +238,14 @@ extension SyncEvent {
     init?(_ event: NSPersistentCloudKitContainer.Event) {
         switch event.type {
         case .setup: kind = .setup
-        case .import: kind = .import
-        case .export: kind = .export
+        case .import: kind = .download
+        case .export: kind = .upload
         @unknown default: return nil
         }
         startDate = event.startDate
         endDate = event.endDate
         succeeded = event.succeeded
-        problem = event.error.map(SyncProblem.init)
+        error = event.error.map(SyncError.init)
     }
 }
 
@@ -289,8 +266,8 @@ final class ObserverTokens: @unchecked Sendable {
 @MainActor private var monitors: [ObjectIdentifier: SyncMonitor] = [:]
 
 extension ModelContainer {
-    /// The container's sync monitor, made the first time it's asked for and kept as long as the app runs.
-    /// Asking for it early, such as where the container is made, also starts tracking each object's status.
+    /// The container's sync monitor, made the first time it's read and kept as long as the app runs.
+    /// Reading it at launch also starts tracking each object's `syncStatus`.
     @MainActor
     public var sync: SyncMonitor {
         if let monitor = monitors[ObjectIdentifier(self)] { return monitor }
