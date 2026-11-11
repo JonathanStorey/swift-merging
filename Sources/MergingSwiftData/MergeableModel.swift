@@ -35,8 +35,8 @@ import SwiftData
 /// }
 /// ```
 ///
-/// A macro will write this conformance from `@Merge(.strategy)` on the model's own properties. Until then
-/// it's written by hand, as above.
+/// `@MergeableModel` writes this conformance from `@Merge(.strategy)` on the model's own properties, so it's
+/// only written by hand to merge differently than the macro would.
 public protocol MergeableModel: PersistentModel {
     associatedtype MergeSnapshot: Codable & Equatable & Mergeable
 

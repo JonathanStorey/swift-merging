@@ -205,14 +205,22 @@ merges with the same strategies as above. Needs iOS 18 or macOS 15.
 ```swift
 import MergingSwiftData
 
+@Model @MergeableModel
+final class Note {
+    @Merge(.byWord) var body = ""                       // edits to different words combine
+    @Merge(.sum) var likes = 0                          // both sides' increments count
+    @Merge(.keep(.theirs)) @Attribute(.externalStorage) var photo: Data?
+    var color = "red"                                   // keeps the side that changed it
+}
+
 let container = try ModelContainer(for: Note.self)
-try container.enableMerging(Note.self)          // nothing else to call
+try container.enableMerging(Note.self)                  // nothing else to call
 ```
 
-A model conforms to `MergeableModel` by naming its merged properties in a `Codable` `Mergeable` snapshot,
-with `@Merged` picking each one's strategy. A macro, `@Merge(.strategy)` on the model's own properties, will
-write that conformance; for now it's written by hand, as in
-[the tests](Tests/MergingSwiftDataTests/Support.swift).
+`@Merge` takes the same strategies as `@Merged`, and is only for SwiftData models: on anything else it's a
+compile error. `@MergeableModel` writes the model's `MergeableModel` conformance, a snapshot of every stored
+property, since a SwiftData save writes the whole object and a property left out would lose the other
+side's change. `@Transient` and `@Relationship` properties are left out.
 
 ## Requirements
 

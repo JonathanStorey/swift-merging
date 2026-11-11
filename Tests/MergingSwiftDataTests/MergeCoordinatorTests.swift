@@ -65,6 +65,18 @@ import Testing
     }
 
     @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
+    @Test func anExternalStoragePropertyMergesByItsStrategy() throws {
+        let (_, saved) = try merge(ours: { $0.photo = Data([1]); $0.likes += 1 }, theirs: { $0.photo = Data([2]); $0.likes += 1 })
+        #expect(saved.photo == Data([2]))
+        #expect(saved.likes == 2)
+    }
+
+    @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
+    @Test func theMacroListsEveryStoredProperty() {
+        #expect(Note.mergeKeyPaths == [\Note.title, \Note.body, \Note.likes, \Note.steps, \Note.color, \Note.photo])
+    }
+
+    @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
     @Test func aConflictKeepsOursByDefault() throws {
         let (_, saved) = try merge(ours: { $0.body = "the slow brown fox" }, theirs: { $0.body = "the fast brown fox" })
         #expect(saved.body == "the slow brown fox")
