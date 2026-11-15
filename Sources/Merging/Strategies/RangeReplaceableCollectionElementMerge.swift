@@ -22,9 +22,13 @@ where Value.Element: Equatable {
 
 extension Array where Element: Equatable {
     /// Merges element by element, like a three-way merge of lines. An element either side removed is
-    /// removed, and what each side inserted goes where it was inserted, ours first. An element both sides
-    /// replaced merges only if they replaced it with the same element, and `nil` otherwise.
-    func mergingElements(with theirs: [Element], from base: [Element]) -> [Element]? {
+    /// removed, and what each side inserted goes where it was inserted, ours first. Where both sides replaced
+    /// one element with one element each, `replaced` merges ours, theirs, and the base element, and by
+    /// default only equal replacements merge. Any other replacement both sides made is `nil`.
+    func mergingElements(
+        with theirs: [Element], from base: [Element],
+        replaced: (Element, Element, Element) -> Element? = { $0 == $1 ? $0 : nil }
+    ) -> [Element]? {
         let mine = Edits(self, from: base)
         let other = Edits(theirs, from: base)
         var merged: [Element] = []
@@ -35,8 +39,10 @@ extension Array where Element: Equatable {
             } else if inserted.isEmpty {
                 merged += theirsInserted
             } else if index < base.count, mine.removed.contains(index), other.removed.contains(index) {
-                // Both replaced the element that follows, differently.
-                return nil
+                // Both replaced the element that follows.
+                guard inserted.count == 1, theirsInserted.count == 1,
+                      let element = replaced(inserted[0], theirsInserted[0], base[index]) else { return nil }
+                merged.append(element)
             } else {
                 merged += inserted + theirsInserted
             }

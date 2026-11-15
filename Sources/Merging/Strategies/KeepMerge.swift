@@ -1,4 +1,4 @@
-/// A side of a merge, which `.keep` names.
+/// A side of a merge, which `.keep` and `.total(favoring:)` name.
 public enum MergeSide: Sendable {
     case ours
     case theirs

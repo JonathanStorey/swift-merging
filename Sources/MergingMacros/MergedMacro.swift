@@ -66,10 +66,12 @@ private let shorthandStrategies = [
     "byElement": "RangeReplaceableCollectionElementMerge",
     "byKey": "DictionaryKeyedMerge",
     "byMembership": "SetAlgebraMembershipMerge",
+    "byNode": "CodableNodeMerge",
     "byWord": "StringWordMerge",
     "keep": "KeepMerge",
     "maximum": "ComparableMaximumMerge",
     "sum": "NumericSumMerge",
+    "total": "CodableTotalMerge",
     "trueWins": "BoolTrueWinsMerge",
     "union": "SetAlgebraUnionMerge",
 ]
