@@ -12,6 +12,7 @@ final class SchemaProbe: Decoder {
     private var element: SchemaProbe?
     fileprivate var isOptional = false
     fileprivate var isDictionary = false
+    private var isSet = false
 
     init(codingPath: [any CodingKey] = [], types: [ObjectIdentifier] = []) {
         self.codingPath = codingPath
@@ -22,7 +23,7 @@ final class SchemaProbe: Decoder {
         let shape: CodableSchema = if let keyed {
             if isDictionary, let value = keyed[Self.dictionaryKey] { .dictionary(value.schema) } else { .object(keyed.mapValues(\.schema)) }
         } else if let element {
-            .array(element.schema)
+            isSet ? .set(element.schema) : .array(element.schema)
         } else {
             kind ?? .object([:])
         }
@@ -39,24 +40,29 @@ final class SchemaProbe: Decoder {
         types.append(id)
         defer { types.removeLast() }
         do {
-            return try T(from: self)
+            let value = try T(from: self)
+            if (type as? any MergeKinded.Type)?.mergeKind == .set { isSet = true }
+            return value
         } catch DecodingError.dataCorrupted(let context) where type is any RawRepresentable.Type {
             let reason = "\(type) rejected a placeholder raw value. Make it CaseIterable to read its schema."
             throw DecodingError.dataCorrupted(.init(codingPath: context.codingPath, debugDescription: reason, underlyingError: nil))
         }
     }
 
-    /// A real instance for types whose decoding checks its input, with the shape its encoding has.
+    /// A real instance for types whose decoding checks its input or that the schema names: a date, every
+    /// case of a `CaseIterable` enum, and a `UUID` or `URL` with the shape its encoding has.
     private func placeholder<T>(_ type: T.Type) throws -> T? {
-        let instance: Any? = if type is UUID.Type {
-            UUID()
-        } else if type is URL.Type {
-            URL(fileURLWithPath: "/")
-        } else if let iterable = type as? any CaseIterable.Type {
-            firstCase(of: iterable)
-        } else {
-            nil
+        if type is Date.Type {
+            kind = .date
+            return Date(timeIntervalSinceReferenceDate: 0) as? T
         }
+        if let iterable = type as? any CaseIterable.Type {
+            let cases = allCases(of: iterable)
+            guard let first = cases.first as? T else { return nil }
+            kind = .enumeration(try cases.compactMap { $0 as? any Encodable }.map { try CodableValue(encoding: $0) })
+            return first
+        }
+        let instance: Any? = if type is UUID.Type { UUID() } else if type is URL.Type { URL(fileURLWithPath: "/") } else { nil }
         guard let value = instance as? T, let encodable = instance as? any Encodable else { return nil }
         kind = CodableSchema(shapeOf: try CodableValue(encoding: encodable))
         return value
@@ -98,8 +104,8 @@ final class SchemaProbe: Decoder {
     func singleValueContainer() -> any SingleValueDecodingContainer { self }
 }
 
-private func firstCase<C: CaseIterable>(of type: C.Type) -> C? {
-    type.allCases.first
+private func allCases<C: CaseIterable>(of type: C.Type) -> [Any] {
+    type.allCases.map { $0 as Any }
 }
 
 extension SchemaProbe: SingleValueDecodingContainer {

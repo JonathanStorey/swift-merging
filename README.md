@@ -105,10 +105,15 @@ let undone = try edited.applying(difference.inverse())     // == original
 Objects compare key by key and arrays index by index, so an element inserted mid-array shows as
 replacements of the ones after it.
 
+A difference is `Codable`, so it can be saved or sent to another device and applied there. It carries the
+`CodableSchema` id of the type it was made from, and `applying(_:)` refuses one made for another schema.
+Changes name their case, with paths as arrays and values as plain JSON:
+`{"schemaID": "…", "changes": [{"replace": {"path": ["age"], "old": 30, "new": 31}}]}`.
+
 ## Schemas
 
-`CodableSchema` reads the shape of a `Decodable` type from the type alone: each property's kind, and which
-are optional. It's `Codable`, so two versions of a model can be compared with `CodableDifference`, and
+`CodableSchema` reads the shape of a `Decodable` type from the type alone: each property's kind, which
+are optional, which collections are sets, which numbers are dates, and every case of a `CaseIterable` enum. It's `Codable`, so two versions of a model can be compared with `CodableDifference`, and
 `schema[change.path]` says whether a change is at an optional, an array or a dictionary.
 
 ```swift

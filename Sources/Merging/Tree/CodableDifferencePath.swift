@@ -141,3 +141,35 @@ extension CodableDifference.Path: CustomStringConvertible {
         return text
     }
 }
+
+extension CodableDifference.Path: Codable {
+    /// The keys and indices as an array: `["child", "grandchildren", 0]`.
+    public func encode(to encoder: any Encoder) throws {
+        var container = encoder.singleValueContainer()
+        try container.encode(components)
+    }
+
+    public init(from decoder: any Decoder) throws {
+        self.init(try decoder.singleValueContainer().decode([Component].self))
+    }
+}
+
+extension CodableDifference.Path.Component: Codable {
+    /// A key as a string and an index as a number.
+    public func encode(to encoder: any Encoder) throws {
+        var container = encoder.singleValueContainer()
+        switch self {
+        case .key(let key): try container.encode(key)
+        case .index(let index): try container.encode(index)
+        }
+    }
+
+    public init(from decoder: any Decoder) throws {
+        let container = try decoder.singleValueContainer()
+        if let index = try? container.decode(Int.self) {
+            self = .index(index)
+        } else {
+            self = .key(try container.decode(String.self))
+        }
+    }
+}

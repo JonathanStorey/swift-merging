@@ -1,4 +1,5 @@
 // Not `@testable`, so these tests only see the public surface.
+import Foundation
 import Merging
 import Testing
 
@@ -74,5 +75,57 @@ import Testing
         #expect(("[2][1]" as CodableDifference.Path).components == [.index(2), .index(1)])
         #expect(("." as CodableDifference.Path).components.isEmpty)
         #expect((["config", "v1.2"] as CodableDifference.Path).components == [.key("config"), .key("v1.2")])
+    }
+
+    @Test func travelsAsJSON() throws {
+        let difference = try CodableDifference(from: original, to: edited)
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = .sortedKeys
+        let data = try encoder.encode(difference)
+        let received = try JSONDecoder().decode(CodableDifference.self, from: data)
+        #expect(received == difference)
+        #expect(try original.applying(received) == edited)
+
+        let small = try CodableDifference(from: [1, 2], to: [1, 3, 4])
+        let json = try JSONDecoder().decode(CodableValue.self, from: encoder.encode(small))
+        guard case .object(let object) = json else { Issue.record("Expected an object, got \(json)"); return }
+        let arrayID = try CodableSchema([Int].self).id
+        #expect(object["schemaID"] == .string(arrayID.uuidString))
+        #expect(object["changes"] == [
+            ["replace": ["new": 3, "old": 2, "path": [1]]],
+            ["insert": ["element": 4, "path": [2]]],
+        ])
+    }
+
+    @Test func pathsAndValuesEncodeAsPlainJSON() throws {
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = .sortedKeys
+        let path: CodableDifference.Path = ["config", "v1.2", 0]
+        #expect(String(decoding: try encoder.encode(path), as: UTF8.self) == #"["config","v1.2",0]"#)
+        #expect(try JSONDecoder().decode(CodableDifference.Path.self, from: encoder.encode(path)) == path)
+
+        let value: CodableValue = ["name": "Ana", "tags": ["a", nil], "age": 30, "ratio": 0.5, "on": true]
+        #expect(String(decoding: try encoder.encode(value), as: UTF8.self)
+            == #"{"age":30,"name":"Ana","on":true,"ratio":0.5,"tags":["a",null]}"#)
+        #expect(try JSONDecoder().decode(CodableValue.self, from: encoder.encode(value)) == value)
+    }
+
+    @Test func recordsTheSchemaItWasMadeFrom() throws {
+        let difference = try CodableDifference(from: original, to: edited)
+        let personID = try CodableSchema(Person.self).id
+        #expect(difference.schemaID == personID)
+        #expect(difference.inverse().schemaID == difference.schemaID)
+        #expect(try CodableDifference(from: CodableSchema.string, to: .integer).schemaID == nil)
+    }
+
+    @Test func refusesADifferenceForAnotherSchema() throws {
+        struct Pet: Codable, Equatable { var name: String }
+        struct Tag: Codable, Equatable { var name: String; var color: String? }
+        let renaming = try CodableDifference(from: Pet(name: "Rex"), to: Pet(name: "Max"))
+        #expect(throws: DecodingError.self) { try Tag(name: "Rex").applying(renaming) }
+
+        let anonymous = try JSONDecoder().decode(CodableDifference.self, from: Data(#"{"changes":[{"replace":{"path":["name"],"old":"Rex","new":"Max"}}]}"#.utf8))
+        #expect(anonymous.schemaID == nil)
+        #expect(try Tag(name: "Rex").applying(anonymous) == Tag(name: "Max"))
     }
 }
