@@ -54,9 +54,9 @@ import Testing
             "tags": .array(.string),
             "child": .optional(.object(["grandchildren": .array(.string)])),
             "scores": .dictionary(.double),
-            "born": .double,
+            "born": .date,
             "id": .string,
-            "status": .string,
+            "status": .enumeration(["draft", "done"]),
             "flags": .set(.integer),
             "notes": .array(.optional(.string)),
         ]))
@@ -67,6 +67,9 @@ import Testing
         #expect(try CodableSchema(Pet.self).description == "{name: string, nickname: string?, tags: [string]}")
         #expect(try CodableSchema([String: Int?].self).description == "[string: integer?]")
         #expect(try CodableSchema(Set<String>.self).description == "set<string>")
+        #expect(try CodableSchema(Status.self).description == #""draft" | "done""#)
+        #expect(try CodableSchema(Status?.self).description == #"("draft" | "done")?"#)
+        #expect(try CodableSchema(Date.self).description == "date")
     }
 
     @Test func looksUpByPath() throws {
