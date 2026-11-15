@@ -11,11 +11,11 @@
 /// ```
 ///
 /// The property's type comes from its annotation, or from a string, number, or `true`/`false` literal.
-@attached(peer, names: prefixed($))
+@attached(peer, names: prefixed(`$`))
 public macro Merged<Strategy: MergeStrategy>(_ strategy: Strategy) = #externalMacro(module: "MergingMacros", type: "MergedMacro")
 
 /// Picks one of the package's own strategies by its shorthand, such as `.keep(.ours)`.
-@attached(peer, names: prefixed($))
+@attached(peer, names: prefixed(`$`))
 public macro Merged(_ strategy: MergeShorthand) = #externalMacro(module: "MergingMacros", type: "MergedMacro")
 
 /// The shorthand `@Merged` takes for the package's own strategies. Most are generic over the property's
