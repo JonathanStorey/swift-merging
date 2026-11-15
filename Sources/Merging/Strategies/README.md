@@ -9,6 +9,7 @@
 | [`.byWord`](#byword) | `StringWordMerge` | `String` | word by word | yes |
 | [`.keep(.ours)`, `.keep(.theirs)`](#keep) | `KeepMerge` | anything | the named side | no |
 | [`.maximum`](#maximum) | `ComparableMaximumMerge` | any `Comparable` | the larger | no |
+| [`.mergeable(favoring:)`](#mergeable) | `MergeableMerge` | any `Mergeable` | by its own `merging` | no |
 | [`.sum`](#sum) | `NumericSumMerge` | any `Numeric` | both changes added | yes |
 | [`.total(favoring:)`](#total) | `CodableTotalMerge` | any `Codable` | node by node, clashes to one side | no |
 | [`.trueWins`](#truewins) | `BoolTrueWinsMerge` | `Bool` | `true` if either is | no |
@@ -193,6 +194,20 @@ one side changed still keeps that change.
 - **Never conflicts.**
 - **Watch for:** a value that should be able to go down, such as a score after a reset. A decrease on one
   side loses to an increase on the other.
+
+## .mergeable
+
+`MergeableMerge` merges a value of a `Mergeable` type by the type's own `merging` functions, favoring the
+named side where both changed the same thing.
+
+```swift
+@Merged(.mergeable(favoring: .theirs)) var tally: Tally = Tally()    // a Mergeable type of your own
+```
+
+- **Good for:** a type that knows how to merge itself, such as a counter or a document model.
+- **Needs a base:** No. Without one it uses the type's two-way `merging`.
+- **Conflicts:** only where the type's merge throws, which is `nil` here.
+- **Watch for:** the type's base must be the type itself, so `CodableDifference` doesn't fit.
 
 ## .sum
 

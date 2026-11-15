@@ -110,6 +110,31 @@ A difference is `Codable`, so it can be saved or sent to another device and appl
 Changes name their case, with paths as arrays and values as plain JSON:
 `{"schemaID": "…", "changes": [{"replace": {"path": ["age"], "old": 30, "new": 31}}]}`.
 
+## Mergeable
+
+A type that merges with another version of itself implements two functions and gets six: the two
+`merging` functions it writes, a mutating `merge` for each, and a static `merge` for each. A merge
+always merges, with the favored side winning where both changed the same thing, and a type whose base is
+itself merges with `@Merged(.mergeable(favoring:))`.
+
+```swift
+struct Tally: Mergeable {
+    var count = 0
+    func merging(with theirs: Tally, favoring side: MergeSide) throws -> Tally { side == .ours ? self : theirs }
+    func merging(with theirs: Tally, from base: Tally, favoring side: MergeSide) throws -> Tally {
+        Tally(count: count + theirs.count - base.count)
+    }
+}
+```
+
+`CodableDifference` is `Mergeable`, so two differences made from the same value merge into one, and
+`followed(by:)` squashes one difference and the next into one.
+
+```swift
+let both = try mine.merging(with: yours, from: original, favoring: .theirs)
+let squashed = first.followed(by: second)
+```
+
 ## Schemas
 
 `CodableSchema` reads the shape of a `Decodable` type from the type alone: each property's kind, which
