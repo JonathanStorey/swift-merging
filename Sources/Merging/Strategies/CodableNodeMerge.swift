@@ -1,15 +1,14 @@
-/// Merges a `Codable` value node by node through its `CodableTree`, a structured merge: a node only one
-/// side changed keeps that side. Where both changed it, a `@Merged` property merges by its strategy, a
-/// `Mergeable` one by its type's own merge, an object key by key, an array element by element, and anything
-/// else is a conflict. The result must decode, or the merge is a conflict. Without a base, only what's
-/// equal merges, along with nodes whose strategy or type can merge without one.
-///
-/// It's how a `Codable` type merges when it conforms to `Mergeable` with no code, and it merges any other
-/// `Codable` value too:
+/// Merges a `Codable` value node by node through its stored form, a structured merge: a node only one side
+/// changed keeps that side. Where both changed it, an object merges key by key, an array element by
+/// element, a `Set` by membership, a `Dictionary` by key, and anything else can't be merged. The result
+/// must decode, or the merge is `nil`. Without a base, only what's equal merges.
 ///
 /// ```swift
-/// try CodableNodeMerge<Address>().merge(base: original, ours: mine, theirs: yours)
+/// @Merged(.byNode) var address: Address = Address()
+/// CodableNodeMerge<Address>().merge(base: original, ours: mine, theirs: yours)
 /// ```
+///
+/// It encodes and decodes on every merge, which fits syncing better than tight loops.
 public struct CodableNodeMerge<Value: Codable & Sendable>: MergeStrategy {
     public init() {}
 
@@ -31,33 +30,5 @@ public struct CodableNodeMerge<Value: Codable & Sendable>: MergeStrategy {
         } catch {
             return nil
         }
-    }
-}
-
-/// The shortcut for `CodableNodeMerge`, as `.byNode`.
-public struct ByNodeShortcut: MergeStrategy, MergeShortcut {
-    public typealias Value = Never
-
-    public init() {}
-
-    public func merge(base: Never, ours: Never, theirs: Never) -> Never? {}
-
-    static func rule<Value: Codable & Sendable>(for type: Value.Type) -> MergeRule {
-        MergeRule(type) { ours, theirs, base in
-            let strategy = CodableNodeMerge<Value>()
-            guard let base else { return strategy.merge(ours: ours, theirs: theirs) }
-            return strategy.merge(base: base, ours: ours, theirs: theirs)
-        }
-    }
-}
-
-extension MergeStrategy where Self == ByNodeShortcut {
-    /// Merges node by node, as a `Codable` `Mergeable` type does, overriding a type's own merge.
-    public static var byNode: ByNodeShortcut { ByNodeShortcut() }
-}
-
-extension Merged where Strategy == ByNodeShortcut {
-    public init(wrappedValue: Value, _ strategy: ByNodeShortcut) {
-        self.init(wrappedValue: wrappedValue, shortcut: strategy)
     }
 }

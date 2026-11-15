@@ -1,305 +1,154 @@
 import Foundation
-@testable import Merging
+import Merging
 import Testing
 
-struct Level: Codable, Comparable, Sendable {
+struct Level: Comparable, Sendable {
     var number: Int
     static func < (lhs: Level, rhs: Level) -> Bool { lhs.number < rhs.number }
 }
 
-struct Game: Codable, Equatable, Mergeable {
+struct Spot: Codable, Hashable, Sendable {
+    var x: Int
+    var y: Int
+}
+
+struct Shipping: OptionSet, Sendable, Hashable {
+    let rawValue: Int
+    static let fast = Shipping(rawValue: 1)
+    static let gift = Shipping(rawValue: 2)
+    static let signed = Shipping(rawValue: 4)
+}
+
+/// Every shorthand on one type, so a shorthand the macro doesn't know fails to compile.
+struct Game {
     @Merged(.maximum) var highScore = 10
-    @Merged(.maximum) var level = Level(number: 1)
-    @Merged(.maximum) var lastSeen = Date(timeIntervalSinceReferenceDate: 100)
+    @Merged(.maximum) var level: Level = Level(number: 1)
+    @Merged(.maximum) var lastSeen: Date = Date(timeIntervalSinceReferenceDate: 100)
     @Merged(.sum) var wins = 3
     @Merged(.sum) var distance = 1.5
+    @Merged(.sum) var bytes: UInt8 = 10
     @Merged(.trueWins) var flagged = false
     @Merged(.byWord) var note = "the quick brown fox"
+    @Merged(.byElement) var steps: [String] = ["boil", "stir", "serve"]
+    @Merged(.byElement) var title = "soup"
+    @Merged(.byMembership) var tags: Set<String> = ["a", "b", "c"]
+    @Merged(.byMembership) var shipping: Shipping = [.fast]
+    @Merged(.union) var recipients: Set<String> = ["ana", "bo"]
+    @Merged(.byKey) var pins: [Spot: String] = [Spot(x: 0, y: 0): "home"]
+    @Merged(.keep(.theirs)) var cachedTotal = 0
 }
 
 @Suite struct StrategyTests {
     let base = Game()
 
-    /// Merges two edits of the base made by `ours` and `theirs`.
-    func merge(_ ours: (inout Game) -> Void, _ theirs: (inout Game) -> Void) -> Game? {
-        var mine = base
-        ours(&mine)
-        var other = base
-        theirs(&other)
-        return mine.merging(with: other, from: base)
+    @Test func maximumKeepsTheLargerByTheTypesOwnOrder() {
+        let ours = Game(highScore: 30, level: Level(number: 5), lastSeen: Date(timeIntervalSinceReferenceDate: 300))
+        #expect(ours.$highScore.merging(with: 20, from: base.highScore) == 30)
+        #expect(ours.$level.merging(with: Level(number: 3), from: base.level) == Level(number: 5))
+        #expect(ours.$lastSeen.merging(with: Date(timeIntervalSinceReferenceDate: 200), from: base.lastSeen)
+            == Date(timeIntervalSinceReferenceDate: 300))
+        #expect(base.$highScore.merging(with: 50) == 50)
     }
 
-    @Test func maximumKeepsTheLargerByTheTypesOwnOrder() throws {
-        let merged = try #require(merge({ $0.highScore = 30; $0.level = Level(number: 5); $0.lastSeen = Date(timeIntervalSinceReferenceDate: 300) },
-                                        { $0.highScore = 20; $0.level = Level(number: 3); $0.lastSeen = Date(timeIntervalSinceReferenceDate: 200) }))
-        #expect(merged.highScore == 30)
-        #expect(merged.level == Level(number: 5))
-        #expect(merged.lastSeen == Date(timeIntervalSinceReferenceDate: 300))
-    }
-
-    @Test func sumCountsBothSides() throws {
-        let merged = try #require(merge({ $0.wins += 2; $0.distance += 1 }, { $0.wins += 1; $0.distance += 0.5 }))
-        #expect(merged.wins == 6)
-        #expect(merged.distance == 3)
-    }
-
-    @Test func sumThatOverflowsIsAConflict() {
-        var start = base
-        start.wins = .max - 1
-        var ours = start
-        ours.wins += 1
-        var theirs = start
-        theirs.wins += 1
-        #expect(ours.merging(with: theirs, from: start) == nil)
-    }
-
-    @Test func trueWinsSetsTheFlag() throws {
-        #expect(merge({ $0.flagged = true; $0.highScore = 11 }, { $0.flagged = false; $0.highScore = 12 })?.flagged == true)
-    }
-
-    @Test func wordEditsCombine() throws {
-        let merged = try #require(merge({ $0.note = "the slow brown fox" }, { $0.note = "the quick brown cat, again" }))
-        #expect(merged.note == "the slow brown cat, again")
-    }
-
-    @Test func editsToTheSameWordConflict() {
-        #expect(merge({ $0.note = "the slow brown fox" }, { $0.note = "the fast brown fox" }) == nil)
-    }
-
-    @Test func twoWayWorksForStrategiesThatNeedNoBase() throws {
-        var theirs = base
-        theirs.highScore = 50
-        theirs.flagged = true
-        let merged = try #require(base.merging(with: theirs))
-        #expect(merged.highScore == 50)
-        #expect(merged.flagged)
-        theirs.wins = 9
-        #expect(base.merging(with: theirs) == nil)
-    }
-
-    @Test func wordsJoinBackToTheText() {
-        let text = "  Hello, world!  Don't stop.\r\nNew line"
-        #expect(StringWordMerge<String>.words(text) == ["  ", "Hello, ", "world!  ", "Don't ", "stop.\r\n", "New ", "line"])
-    }
-}
-
-@Suite struct EqualChangeTests {
-    @Test func equalIncrementsBothCount() throws {
-        let base = Game()
+    @Test func sumCountsBothSides() {
         var ours = base
-        ours.wins += 1
-        var theirs = base
-        theirs.wins += 1
-        #expect(ours.merging(with: theirs, from: base)?.wins == 5)
+        ours.wins += 2
+        ours.distance += 1
+        ours.bytes -= 4
+        #expect(ours.$wins.merging(with: base.wins + 1, from: base.wins) == 6)
+        #expect(ours.$distance.merging(with: base.distance + 0.5, from: base.distance) == 3)
+        #expect(ours.$bytes.merging(with: base.bytes + 1, from: base.bytes) == 7)
     }
-}
 
-/// Keeps the larger number, working on the stored form.
-struct LargerTree: TreeMergeStrategy {
-    func merge(base: CodableTree, ours: CodableTree, theirs: CodableTree) -> CodableTree? {
-        guard let mine = ours.double, let other = theirs.double else { return nil }
-        return mine < other ? theirs : ours
+    @Test func equalIncrementsBothCount() {
+        let ours = Game(wins: 4)
+        #expect(ours.$wins.merging(with: 4, from: 3) == 5)
     }
-}
 
-extension Merged where Strategy == LargerTree {
-    init(wrappedValue: Value, _ strategy: LargerTree) where Value: Numeric {
-        self.init(wrappedValue: wrappedValue, unchecked: strategy)
+    @Test func aSumThatOverflowsCantMerge() {
+        #expect(NumericSumMerge<UInt8>().merge(base: 100, ours: 200, theirs: 200) == nil)
+        #expect(NumericSumMerge<Int>().merge(base: 0, ours: .max, theirs: 1) == nil)
     }
-}
 
-@Suite struct TypedStrategyTests {
-    @Test func strategiesMergePlainValues() throws {
-        #expect(ComparableMaximumMerge<Int>().merge(base: 1, ours: 5, theirs: 3) == 5)
-        #expect(StringWordMerge<String>().merge(base: "a b c", ours: "x b c", theirs: "a b z") == "x b z")
-        #expect(StringWordMerge<Substring>().merge(base: "a b", ours: "x b", theirs: "a z") == "x z")
+    @Test func aSumNeedsABaseUnlessEqual() {
         #expect(NumericSumMerge<Int>().merge(ours: 1, theirs: 2) == nil)
-        #expect(SetAlgebraUnionMerge<Set<Int>>().merge(ours: [1], theirs: [2]) == [1, 2])
-        #expect(DictionaryKeyedMerge<[String: Int]>().merge(base: ["a": 1], ours: ["a": 1, "b": 2], theirs: [:]) == ["b": 2])
-    }
-}
-
-@Suite struct TypedMergeTests {
-    struct Score: Codable, Mergeable {
-        @Merged(LargerTree()) var best = 0
-        @Merged(LargerTree().typed(as: Int.self)) var worst = 0
+        #expect(NumericSumMerge<Int>().merge(ours: 5, theirs: 5) == 5)
     }
 
-    @Test func aTreeStrategyMergesPlainValues() throws {
-        #expect(LargerTree().typed(as: Int.self).merge(base: 1, ours: 5, theirs: 3) == 5)
-        #expect(LargerTree().typed(as: String.self).merge(base: "a", ours: "b", theirs: "c") == nil)
+    @Test func trueWinsSetsTheFlag() {
+        #expect(Game(flagged: true).$flagged.merging(with: false, from: false) == true)
+        #expect(base.$flagged.merging(with: true) == true)
+        // A side only one changed keeps that side, so clearing the flag sticks when the other left it.
+        #expect(base.$flagged.merging(with: true, from: true) == false)
+        #expect(BoolTrueWinsMerge().merge(base: true, ours: false, theirs: true) == true)
     }
 
-    @Test func aTreeStrategyWorksInMerged() throws {
-        var ours = Score()
-        ours.best = 7
-        ours.worst = 7
-        var theirs = Score()
-        theirs.best = 4
-        theirs.worst = 4
-        let merged = try #require(ours.merging(with: theirs, from: Score()))
-        #expect(merged.best == 7)
-        #expect(merged.worst == 7)
-    }
-}
-
-@Suite struct CodableNodeMergeTests {
-    /// Codable, but not Mergeable.
-    struct Place: Codable, Equatable {
-        var street = "Elm"
-        var city = "Oslo"
+    @Test func wordEditsCombine() {
+        let ours = Game(note: "the slow brown fox")
+        #expect(ours.$note.merging(with: "the quick brown cat, again", from: base.note) == "the slow brown cat, again")
     }
 
-    struct Trip: Codable, Mergeable {
-        @Merged(.byNode) var booking = Booking(note: "a", confirmed: false)
+    @Test func editsToTheSameWordCantMerge() {
+        let ours = Game(note: "the slow brown fox")
+        #expect(ours.$note.merging(with: "the fast brown fox", from: base.note) == nil)
+        #expect(StringWordMerge<String>().merge(ours: "the fox", theirs: "the fox") == "the fox")
     }
 
-    @Test func mergesAnyCodableValue() throws {
-        let merged = CodableNodeMerge<Place>().merge(base: Place(), ours: Place(street: "Oak"), theirs: Place(city: "Bergen"))
-        #expect(merged == Place(street: "Oak", city: "Bergen"))
+    @Test func insertionsFromBothSidesAreKept() {
+        let ours = Game(steps: ["boil", "salt", "stir", "serve"])
+        #expect(ours.$steps.merging(with: ["stir", "serve", "eat"], from: base.steps) == ["salt", "stir", "serve", "eat"])
     }
 
-    @Test func byNodeOverridesATypesOwnMerge() throws {
-        var ours = Trip()
-        ours.booking.note = "b"
-        var theirs = Trip()
-        theirs.booking.confirmed = true
-        let merged = try #require(ours.merging(with: theirs, from: Trip()))
-        #expect(merged.booking == Booking(note: "b", confirmed: true))
-    }
-}
-
-@Suite struct ProjectedValueTests {
-    @Test func dollarMergesOnePropertyByItsStrategy() throws {
-        var game = Game()
-        #expect(game.$highScore.merging(with: 20, from: 10) == 20)
-        let first = game.$wins.merge(with: 5, from: 3)
-        #expect(first)
-        #expect(game.wins == 5)
-        game.wins = 4
-        let second = game.$wins.merge(with: 5, from: 3)
-        #expect(second)
-        #expect(game.wins == 6)
-        #expect(game.$flagged.merging(with: true) == true)
-        #expect(game.$wins.merging(with: 9) == nil)
-        #expect(game.wins == 6)
-    }
-}
-
-@Suite struct KeepTests {
-    struct Draft: Codable, Equatable, Mergeable {
-        @Merged(.keep(.ours)) var body = "a"
-        @Merged(.keep(.theirs)) var total = 1
-        var title = "t"
+    @Test func textMergesByCharacter() {
+        let ours = Game(title: "soups")
+        #expect(ours.$title.merging(with: "Soup", from: base.title) == "Soups")
+        #expect(RangeReplaceableCollectionElementMerge<String>().merge(base: "cat", ours: "cart", theirs: "cats") == "carts")
     }
 
-    @Test func keepsTheNamedSideWhenBothChanged() throws {
-        var ours = Draft()
-        ours.body = "ours"
-        ours.total = 2
-        var theirs = Draft()
-        theirs.body = "theirs"
-        theirs.total = 3
-        theirs.title = "theirs"
-        let merged = try #require(ours.merging(with: theirs, from: Draft()))
-        #expect(merged.body == "ours")
-        #expect(merged.total == 3)
-        #expect(merged.title == "theirs")
+    @Test func anElementBothReplacedDifferentlyCantMerge() {
+        let strategy = RangeReplaceableCollectionElementMerge<[Int]>()
+        #expect(strategy.merge(base: [1, 2, 3], ours: [0, 1, 2, 3], theirs: [1, 2, 3, 4]) == [0, 1, 2, 3, 4])
+        #expect(strategy.merge(base: [1], ours: [2], theirs: [3]) == nil)
+        #expect(strategy.merge(base: [1], ours: [2], theirs: [2]) == [2])
     }
 
-    @Test func mergesWithoutABase() throws {
-        var ours = Draft()
-        ours.body = "ours"
-        ours.total = 2
-        var theirs = Draft()
-        theirs.body = "theirs"
-        theirs.total = 3
-        let merged = try #require(ours.merging(with: theirs))
-        #expect(merged.body == "ours")
-        #expect(merged.total == 3)
+    @Test func setsMergeByMembership() {
+        let ours = Game(tags: ["c", "a", "ours"], shipping: [.fast, .gift])
+        #expect(ours.$tags.merging(with: ["b", "a", "theirs"], from: base.tags) == ["a", "ours", "theirs"])
+        #expect(ours.$shipping.merging(with: [.signed], from: base.shipping) == [.gift, .signed])
+        #expect(ours.$tags.merging(with: ["c", "a", "ours"]) == ["c", "a", "ours"])
+        #expect(ours.$tags.merging(with: ["a"]) == nil)
     }
 
-    @Test func typedStrategiesKeepTheirSide() {
-        #expect(KeepOursMerge<Int>().merge(base: 1, ours: 2, theirs: 3) == 2)
-        #expect(KeepTheirsMerge<Int>().merge(ours: 2, theirs: 3) == 3)
-    }
-}
-
-@Suite struct FavoringTests {
-    struct Place: Codable, Equatable {
-        var street = "Elm"
-        var city = "Oslo"
+    @Test func manySetsMergeWhateverTheirOrder() {
+        let big = Set((0..<200).map(String.init))
+        let strategy = SetAlgebraMembershipMerge<Set<String>>()
+        #expect(strategy.merge(base: big, ours: big.union(["x"]), theirs: big.subtracting(["7"])) == big.subtracting(["7"]).union(["x"]))
     }
 
-    struct Contact: Codable, Equatable {
-        var name = "Ann"
-        var place = Place()
-        var tags: Set<String> = ["family"]
-        var notes: [String: String] = ["a": "1"]
+    @Test func unionLosesNothingWithoutABase() {
+        let ours = Game(recipients: ["ana", "cy"])
+        #expect(ours.$recipients.merging(with: ["bo", "di", "ana"]) == ["ana", "cy", "bo", "di"])
     }
 
-    @Test func aClashKeepsTheSideAndTheRestStillMerges() throws {
-        var ours = Contact()
-        ours.name = "Ann B."
-        ours.place.street = "Oak"
-        ours.place.city = "Bergen"
-        var theirs = Contact()
-        theirs.name = "Anne"
-        theirs.place.city = "Trondheim"
-        theirs.tags.insert("work")
-        let keepTheirs = CodableTotalMerge<Contact, TheirsSide>().merge(base: Contact(), ours: ours, theirs: theirs)
-        #expect(keepTheirs == Contact(name: "Anne", place: Place(street: "Oak", city: "Trondheim"), tags: ["family", "work"]))
-        let keepOurs = CodableTotalMerge<Contact, OursSide>().merge(base: Contact(), ours: ours, theirs: theirs)
-        #expect(keepOurs == Contact(name: "Ann B.", place: Place(street: "Oak", city: "Bergen"), tags: ["family", "work"]))
+    @Test func unionKeepsRemovalsWithABase() {
+        let ours = Game(recipients: ["ana"])
+        #expect(ours.$recipients.merging(with: ["ana", "bo", "cy"], from: base.recipients) == ["ana", "cy"])
     }
 
-    @Test func aKeyRemovedWhileTheOtherChangedItKeepsTheSide() throws {
-        var ours = Contact()
-        ours.notes["a"] = nil
-        var theirs = Contact()
-        theirs.notes["a"] = "2"
-        #expect(CodableTotalMerge<Contact, OursSide>().merge(base: Contact(), ours: ours, theirs: theirs)?.notes == [:])
-        #expect(CodableTotalMerge<Contact, TheirsSide>().merge(base: Contact(), ours: ours, theirs: theirs)?.notes == ["a": "2"])
+    @Test func aDictionaryMergesByKey() {
+        let ours = Game(pins: [Spot(x: 0, y: 0): "home", Spot(x: 1, y: 1): "ours"])
+        let theirs: [Spot: String] = [Spot(x: 0, y: 0): "start", Spot(x: 2, y: 2): "theirs"]
+        #expect(ours.$pins.merging(with: theirs, from: base.pins) == [
+            Spot(x: 0, y: 0): "start", Spot(x: 1, y: 1): "ours", Spot(x: 2, y: 2): "theirs",
+        ])
     }
 
-    @Test func withoutABaseEachDifferenceKeepsTheSide() throws {
-        var ours = Contact()
-        ours.name = "Ann B."
-        var theirs = Contact()
-        theirs.place.city = "Bergen"
-        let merged = CodableTotalMerge<Contact, TheirsSide>().merge(ours: ours, theirs: theirs)
-        #expect(merged == Contact(name: "Ann", place: Place(street: "Elm", city: "Bergen")))
-    }
-
-    @Test func withoutFavoringAClashStillThrows() {
-        var ours = Contact()
-        ours.name = "Ann B."
-        var theirs = Contact()
-        theirs.name = "Anne"
-        #expect(CodableNodeMerge<Contact>().merge(base: Contact(), ours: ours, theirs: theirs) == nil)
-    }
-}
-
-@Suite struct TotalTests {
-    struct Place: Codable, Equatable {
-        var street = "Elm"
-        var city = "Oslo"
-    }
-
-    struct Trip: Codable, Equatable, Mergeable {
-        @Merged(.total(favoring: .theirs)) var place = Place()
-        @Merged(.total(favoring: .ours)) var stop = Place()
-    }
-
-    @Test func clashesTakeTheFavoredSideAndTheRestMerges() throws {
-        var ours = Trip()
-        ours.place = Place(street: "Oak", city: "Bergen")
-        ours.stop = Place(street: "Oak", city: "Bergen")
-        var theirs = Trip()
-        theirs.place.city = "Trondheim"
-        theirs.stop.city = "Trondheim"
-        let merged = try #require(ours.merging(with: theirs, from: Trip()))
-        #expect(merged.place == Place(street: "Oak", city: "Trondheim"))
-        #expect(merged.stop == Place(street: "Oak", city: "Bergen"))
+    @Test func aDictionaryKeyBothChangedCantMerge() {
+        let strategy = DictionaryKeyedMerge<String, Int>()
+        #expect(strategy.merge(base: ["a": 1], ours: ["a": 2], theirs: ["a": 3]) == nil)
+        #expect(strategy.merge(base: ["a": 1], ours: ["a": 2], theirs: ["a": 2]) == ["a": 2])
+        #expect(strategy.merge(base: ["a": 1, "b": 1], ours: ["b": 1], theirs: ["a": 1, "b": 2]) == ["b": 2])
+        #expect(strategy.merge(base: ["a": 1], ours: [:], theirs: ["a": 2]) == nil)
     }
 }
