@@ -73,10 +73,24 @@ final class Draft {
         #expect(ours.$title.merging(with: "Hey") == nil)
     }
 
+    @Test func mergeWritesBackToTheProperty() {
+        var ours = Profile(nickname: "annie", likes: 1)
+        #expect(ours.$likes.merge(with: 2, from: 0))
+        #expect(ours.likes == 3)
+        #expect(ours.$nickname.merge(with: "anna"))
+        #expect(ours.nickname == "annie")
+        // A strategy that can't merge leaves the property unchanged.
+        ours.title = "Hello"
+        #expect(!ours.$title.merge(with: "Hey"))
+        #expect(ours.title == "Hello")
+    }
+
     @Test func worksInAClassAndOnAStaticProperty() {
         let draft = Draft()
         draft.text = "mine"
         #expect(draft.$text.merging(with: "theirs", from: "") == "mine")
+        draft.$text.merge(with: "theirs", from: "mine")
+        #expect(draft.text == "theirs")
         Draft.shared = "ours"
         #expect(Draft.$shared.merging(with: "theirs", from: "") == "theirs")
     }

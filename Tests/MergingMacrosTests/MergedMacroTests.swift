@@ -14,7 +14,12 @@ import Testing
             var nickname = ""
 
             var $nickname: Merging.MergedProperty<String> {
-                Merging.MergedProperty(self.nickname, Merging.KeepMerge(.ours))
+                get {
+                    Merging.MergedProperty(self.nickname, Merging.KeepMerge(.ours))
+                }
+                set {
+                    self.nickname = newValue.value
+                }
             }
             """
         )
@@ -29,7 +34,12 @@ import Testing
             var title: String = ""
 
             var $title: Merging.MergedProperty<String> {
-                Merging.MergedProperty(self.title, LongerMerge())
+                get {
+                    Merging.MergedProperty(self.title, LongerMerge())
+                }
+                set {
+                    self.title = newValue.value
+                }
             }
             """
         )
@@ -43,8 +53,13 @@ import Testing
             """
             public private(set) static var count: Int?
 
-            public static var $count: Merging.MergedProperty<Int?> {
-                Merging.MergedProperty(self.count, Merging.KeepMerge(.theirs))
+            public private(set) static var $count: Merging.MergedProperty<Int?> {
+                get {
+                    Merging.MergedProperty(self.count, Merging.KeepMerge(.theirs))
+                }
+                set {
+                    self.count = newValue.value
+                }
             }
             """
         )
@@ -61,17 +76,47 @@ import Testing
             var likes = 0
 
             var $likes: Merging.MergedProperty<Int> {
-                Merging.MergedProperty(self.likes, AddMerge())
+                get {
+                    Merging.MergedProperty(self.likes, AddMerge())
+                }
+                set {
+                    self.likes = newValue.value
+                }
             }
             var ratio = 0.5
 
             var $ratio: Merging.MergedProperty<Double> {
-                Merging.MergedProperty(self.ratio, Merging.KeepMerge(.ours))
+                get {
+                    Merging.MergedProperty(self.ratio, Merging.KeepMerge(.ours))
+                }
+                set {
+                    self.ratio = newValue.value
+                }
             }
             var done = false
 
             var $done: Merging.MergedProperty<Bool> {
-                Merging.MergedProperty(self.done, Merging.KeepMerge(.ours))
+                get {
+                    Merging.MergedProperty(self.done, Merging.KeepMerge(.ours))
+                }
+                set {
+                    self.done = newValue.value
+                }
+            }
+            """
+        )
+    }
+
+    @Test func aLetHasAReadOnlyProjection() {
+        expectExpansion(
+            """
+            @Merged(.keep(.ours)) let id: String
+            """,
+            """
+            let id: String
+
+            var $id: Merging.MergedProperty<String> {
+                Merging.MergedProperty(self.id, Merging.KeepMerge(.ours))
             }
             """
         )

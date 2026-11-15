@@ -29,6 +29,15 @@ would without the macro.
 ```swift
 public func merging(with theirs: Value, from base: Value) -> Value?    // three-way
 public func merging(with theirs: Value) -> Value?                      // two-way
+public mutating func merge(with theirs: Value, from base: Value) -> Bool
+public mutating func merge(with theirs: Value) -> Bool
+```
+
+`merge` writes the merged value back to the property through `$name`'s setter, and returns whether it could
+merge. A `let` property gets a read-only `$name`, with only `merging`.
+
+```swift
+mine.$nickname.merge(with: yours.nickname, from: original.nickname)
 ```
 
 - A side only one changed keeps that side, and the strategy decides when both did. Equal changes still go

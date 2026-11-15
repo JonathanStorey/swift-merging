@@ -10,7 +10,8 @@ struct MergingMacrosPlugin: CompilerPlugin {
 }
 
 /// Writes `$name` for a property marked `@Merged(strategy)`: a `MergedProperty` of the property's value and
-/// its strategy. The property itself is left as written.
+/// its strategy, whose setter writes a mutating `merge` back to a `var`. The property itself is left as
+/// written.
 public struct MergedMacro: PeerMacro {
     public static func expansion(
         of node: AttributeSyntax,
@@ -34,10 +35,26 @@ public struct MergedMacro: PeerMacro {
         guard let strategy = node.arguments?.as(LabeledExprListSyntax.self)?.first?.expression else {
             throw MergedDiagnostic.error(at: node, "@Merged needs a strategy, such as @Merged(.keep(.ours))", id: "no-strategy")
         }
+        let projection = "Merging.MergedProperty(self.\(name), \(strategy.expandingShorthand.trimmedDescription))"
+        // A `let` can't be written back, so its projection is read-only.
+        guard variable.bindingSpecifier.tokenKind == .keyword(.var) else {
+            return [
+                """
+                \(raw: variable.projectionModifiers)var $\(raw: name): Merging.MergedProperty<\(type)> {
+                    \(raw: projection)
+                }
+                """,
+            ]
+        }
         return [
             """
             \(raw: variable.projectionModifiers)var $\(raw: name): Merging.MergedProperty<\(type)> {
-                Merging.MergedProperty(self.\(raw: name), \(strategy.expandingShorthand))
+                get {
+                    \(raw: projection)
+                }
+                set {
+                    self.\(raw: name) = newValue.value
+                }
             }
             """,
         ]
@@ -92,16 +109,15 @@ extension PatternBindingSyntax {
 }
 
 extension VariableDeclSyntax {
-    /// The property's access level and `static`, for `$name`, which matches it. `open` becomes `public`,
-    /// and a setter's own access, such as `private(set)`, doesn't apply to a read-only projection.
+    /// The property's access level, including a setter's own such as `private(set)`, and `static`, for
+    /// `$name`, which matches it. `open` becomes `public`, since `$name` can't be overridden.
     fileprivate var projectionModifiers: String {
         modifiers.compactMap { modifier -> String? in
-            guard modifier.detail == nil else { return nil }
             switch modifier.name.tokenKind {
-            case .keyword(.open): return "public "
+            case .keyword(.open): return modifier.detail == nil ? "public " : nil
             case .keyword(.public), .keyword(.package), .keyword(.internal), .keyword(.fileprivate),
                  .keyword(.private), .keyword(.static):
-                return "\(modifier.name.text) "
+                return "\(modifier.trimmedDescription) "
             default: return nil
             }
         }.joined()
