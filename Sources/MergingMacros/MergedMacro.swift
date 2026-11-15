@@ -63,7 +63,15 @@ public struct MergedMacro: PeerMacro {
 
 /// The package's strategies by the shorthand `MergeShorthand` spells them with.
 private let shorthandStrategies = [
+    "byElement": "RangeReplaceableCollectionElementMerge",
+    "byKey": "DictionaryKeyedMerge",
+    "byMembership": "SetAlgebraMembershipMerge",
+    "byWord": "StringWordMerge",
     "keep": "KeepMerge",
+    "maximum": "ComparableMaximumMerge",
+    "sum": "NumericSumMerge",
+    "trueWins": "BoolTrueWinsMerge",
+    "union": "SetAlgebraUnionMerge",
 ]
 
 extension ExprSyntax {

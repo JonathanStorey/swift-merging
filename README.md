@@ -53,7 +53,19 @@ number, or `true`/`false` literal, so `@Merged(.keep(.ours)) var total = makeTot
 
 | Strategy | Type | Works with | Merges | Needs a base |
 | --- | --- | --- | --- | --- |
+| `.byElement` | `RangeReplaceableCollectionElementMerge` | arrays, `String` | element by element | yes |
+| `.byKey` | `DictionaryKeyedMerge` | any `Dictionary` | key by key | yes |
+| `.byMembership` | `SetAlgebraMembershipMerge` | `Set`, any `OptionSet` | additions and removals from both | yes |
+| `.byWord` | `StringWordMerge` | `String` | word by word | yes |
 | `.keep(.ours)`, `.keep(.theirs)` | `KeepMerge` | anything | the named side | no |
+| `.maximum` | `ComparableMaximumMerge` | any `Comparable` | the larger | no |
+| `.sum` | `NumericSumMerge` | any `Numeric` | both changes added | yes |
+| `.trueWins` | `BoolTrueWinsMerge` | `Bool` | `true` if either is | no |
+| `.union` | `SetAlgebraUnionMerge` | `Set`, any `OptionSet` | additions and removals from both, everything without a base | no |
+
+A strategy that needs a base merges only equal values in a two-way merge. `.byElement`, `.byKey` and
+`.byWord` match by `==`, so a place both sides changed differently can't be merged. `.byNode` and
+`.total(favoring:)` arrive with the next step of the rewrite.
 
 The shorthand is a `MergeShorthand`. Most strategies are generic over the property's type, which an
 attribute can't see, so the macro writes the shorthand out as its strategy: `.keep(.ours)` on a `String`
