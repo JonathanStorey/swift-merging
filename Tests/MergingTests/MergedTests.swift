@@ -75,14 +75,15 @@ final class Draft {
 
     @Test func mergeWritesBackToTheProperty() {
         var ours = Profile(nickname: "annie", likes: 1)
-        #expect(ours.$likes.merge(with: 2, from: 0))
-        #expect(ours.likes == 3)
-        #expect(ours.$nickname.merge(with: "anna"))
-        #expect(ours.nickname == "annie")
+        // `#expect` can't call a mutating method, so each result is taken first.
+        let summed = ours.$likes.merge(with: 2, from: 0)
+        #expect(summed && ours.likes == 3)
+        let kept = ours.$nickname.merge(with: "anna")
+        #expect(kept && ours.nickname == "annie")
         // A strategy that can't merge leaves the property unchanged.
         ours.title = "Hello"
-        #expect(!ours.$title.merge(with: "Hey"))
-        #expect(ours.title == "Hello")
+        let longer = ours.$title.merge(with: "Hey")
+        #expect(!longer && ours.title == "Hello")
     }
 
     @Test func worksInAClassAndOnAStaticProperty() {
