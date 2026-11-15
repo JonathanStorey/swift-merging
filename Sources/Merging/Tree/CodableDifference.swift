@@ -16,7 +16,7 @@ import Foundation
 /// optional inside an array keeps its place as `null`, so there it's a replacement from or to `.null`.
 /// `CodableSchema` tells these apart: `schema[change.path]` is `.optional` for an optional.
 public struct CodableDifference: RandomAccessCollection, Hashable, Sendable {
-    public typealias ChangeElement = CodableValue
+    public typealias ChangeElement = CodableRepresentation
 
     /// One difference between the two versions.
     public enum Change: Hashable, Sendable {
@@ -47,7 +47,7 @@ public struct CodableDifference: RandomAccessCollection, Hashable, Sendable {
 
     /// The changes from `old` to `new`.
     public init<Value: Codable>(from old: Value, to new: Value) throws {
-        let changes = try CodableValue(encoding: new).difference(from: CodableValue(encoding: old)).changes
+        let changes = try CodableRepresentation(encoding: new).difference(from: CodableRepresentation(encoding: old)).changes
         self.init(changes, schemaID: try? CodableSchema(Value.self).id)
     }
 
@@ -86,7 +86,7 @@ extension Encodable where Self: Decodable {
             let reason = "The difference was made for schema \(expected), but \(Self.self) has schema \(actual)."
             throw DecodingError.dataCorrupted(.init(codingPath: [], debugDescription: reason))
         }
-        var value = try CodableValue(encoding: self)
+        var value = try CodableRepresentation(encoding: self)
         value.apply(difference)
         return try value.decode()
     }
@@ -141,16 +141,16 @@ private extension CodableDifference.Change {
     }
 }
 
-extension CodableValue {
+extension CodableRepresentation {
     /// What changed from `other` to this value, in the order `forEach` visits.
-    func difference(from other: CodableValue) -> CodableDifference {
+    func difference(from other: CodableRepresentation) -> CodableDifference {
         var changes: [CodableDifference.Change] = []
         Self.collect(from: other, to: self, at: .root, into: &changes)
         return CodableDifference(changes)
     }
 
     private static func collect(
-        from old: CodableValue, to new: CodableValue, at path: CodableDifference.Path, into changes: inout [CodableDifference.Change]
+        from old: CodableRepresentation, to new: CodableRepresentation, at path: CodableDifference.Path, into changes: inout [CodableDifference.Change]
     ) {
         guard old != new else { return }
         switch (old, new) {
@@ -171,7 +171,7 @@ extension CodableValue {
     }
 
     private static func compare(
-        _ old: CodableValue?, _ new: CodableValue?, at path: CodableDifference.Path, into changes: inout [CodableDifference.Change]
+        _ old: CodableRepresentation?, _ new: CodableRepresentation?, at path: CodableDifference.Path, into changes: inout [CodableDifference.Change]
     ) {
         switch (old, new) {
         case let (old?, new?): collect(from: old, to: new, at: path, into: &changes)
@@ -196,7 +196,7 @@ extension CodableValue {
     }
 
     /// Puts `element` at `path`: into an array at its index, shifting what follows, or as an object's entry.
-    private mutating func insert(_ element: CodableValue, at path: CodableDifference.Path) {
+    private mutating func insert(_ element: CodableRepresentation, at path: CodableDifference.Path) {
         guard case .index(let index)? = path.components.last else {
             self[path] = element
             return

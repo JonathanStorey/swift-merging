@@ -1,8 +1,8 @@
 @testable import Merging
 import Testing
 
-@Suite struct CodableValueWalkingTests {
-    let tree: CodableValue = [
+@Suite struct CodableRepresentationWalkingTests {
+    let tree: CodableRepresentation = [
         "name": "Ana",
         "address": ["city": "Oslo", "street": "Elm"],
         "tags": ["a", "b"],

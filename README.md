@@ -87,11 +87,24 @@ struct LongerMerge: MergeStrategy {
 
 Without a two-way merge, an `Equatable` value merges only when both sides are equal.
 
+## Representations
+
+`CodableRepresentation` is a value's stored form, as JSON would hold it. `dictionary()` gives an object's
+fields one level deep, keyed by property name, which suits a `CKRecord`'s fields. A nested value stays one
+value.
+
+```swift
+let representation = try CodableRepresentation(encoding: person)
+let fields = representation.dictionary()                         // ["age": 30, "name": "Ana", ...]
+let rebuilt = try CodableRepresentation.object(fields!).decode(as: Person.self)
+let json = try representation.json                               // {"age":30,"name":"Ana"}, keys sorted
+let same = try CodableRepresentation(data: representation.data)
+```
+
 ## Differences
 
 `CodableDifference` lists what changed between two versions of any `Codable` value, shaped like
-`CollectionDifference`. Each change has a `Path` that reads as a string and a `CodableValue`, the value as
-JSON would hold it.
+`CollectionDifference`. Each change has a `Path` that reads as a string and a `CodableRepresentation` of the value.
 
 ```swift
 let difference = try CodableDifference(from: original, to: edited)

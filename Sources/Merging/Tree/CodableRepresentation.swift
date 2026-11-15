@@ -1,5 +1,7 @@
+import Foundation
+
 /// A value's stored form, as JSON would hold it: what its `Codable` conformance encodes, without the
-/// formatting. It's the element of a `CodableDifference`.
+/// formatting. It's the element of a `CodableDifference`, and `dictionary()` gives an object's fields.
 ///
 /// ```swift
 /// let difference = try CodableDifference(from: original, to: edited)
@@ -8,7 +10,7 @@
 ///
 /// Dates are stored as seconds since 2001, enums with raw values as their raw value, and an optional
 /// that's `nil` is left out of its object.
-public enum CodableValue: Hashable, Sendable {
+public enum CodableRepresentation: Hashable, Sendable {
     case null
     case bool(Bool)
     /// A whole number, from any integer type.
@@ -19,20 +21,39 @@ public enum CodableValue: Hashable, Sendable {
     case double(Double)
     case string(String)
     /// The elements of an array or other unkeyed collection, such as a set, in their encoded order.
-    case array([CodableValue])
+    case array([CodableRepresentation])
     /// The properties of a struct or class, or the entries of a dictionary, by key.
-    case object([String: CodableValue])
+    case object([String: CodableRepresentation])
 }
 
-extension CodableValue {
-    /// The tree of a value.
-    init(encoding value: some Encodable) throws {
+extension CodableRepresentation {
+    /// The representation of `value`: what its `Encodable` conformance encodes.
+    ///
+    /// ```swift
+    /// let representation = try CodableRepresentation(encoding: person)
+    /// ```
+    public init(encoding value: some Encodable) throws {
         self.init(try TreeEncoder().encode(value))
     }
 
-    /// The value this tree holds, decoded as `type`.
-    func decode<T: Decodable>(as type: T.Type = T.self) throws -> T {
+    /// The value this represents, decoded as `type`.
+    ///
+    /// ```swift
+    /// let person = try representation.decode(as: Person.self)
+    /// let person = try CodableRepresentation.object(fields).decode(as: Person.self)
+    /// ```
+    public func decode<T: Decodable>(as type: T.Type = T.self) throws -> T {
         try TreeDecoder().decode(type, from: MergeTree(self))
+    }
+
+    /// The top-level properties or entries, one level deep, if this represents an object. Each key is a
+    /// property name, which also suits a `CKRecord` field name, and a nested value stays one value.
+    ///
+    /// ```swift
+    /// let fields = try CodableRepresentation(encoding: person).dictionary()   // ["age": 30, "child": {...}, "name": "Ana"]
+    /// ```
+    public func dictionary() -> [String: CodableRepresentation]? {
+        object
     }
 
     var isNull: Bool { self == .null }
@@ -66,12 +87,12 @@ extension CodableValue {
         return value
     }
 
-    var array: [CodableValue]? {
+    var array: [CodableRepresentation]? {
         guard case .array(let value) = self else { return nil }
         return value
     }
 
-    var object: [String: CodableValue]? {
+    var object: [String: CodableRepresentation]? {
         guard case .object(let value) = self else { return nil }
         return value
     }
@@ -82,7 +103,7 @@ extension CodableValue {
     /// ```swift
     /// tree["address"]?["city"] = "Bergen"
     /// ```
-    subscript(key: String) -> CodableValue? {
+    subscript(key: String) -> CodableRepresentation? {
         get { object?[key] }
         set {
             guard case .object(var object) = self else { return }
@@ -93,7 +114,7 @@ extension CodableValue {
 
     /// The element at `index`, if this is an array that long. Setting it replaces the element, and setting
     /// `nil` removes it. Setting it outside the array does nothing.
-    subscript(index: Int) -> CodableValue? {
+    subscript(index: Int) -> CodableRepresentation? {
         get {
             guard let array, array.indices.contains(index) else { return nil }
             return array[index]
@@ -107,7 +128,7 @@ extension CodableValue {
 
     /// The nodes directly inside this one: an array's elements, or an object's values in key order. A
     /// single value has none.
-    var children: [CodableValue] {
+    var children: [CodableRepresentation] {
         switch self {
         case .array(let array): array
         case .object(let object): object.keys.sorted().map { object[$0]! }
@@ -116,7 +137,7 @@ extension CodableValue {
     }
 }
 
-extension CodableValue: CustomStringConvertible {
+extension CodableRepresentation: CustomStringConvertible {
     /// The tree as JSON, with keys sorted.
     public var description: String {
         switch self {
@@ -133,7 +154,7 @@ extension CodableValue: CustomStringConvertible {
     }
 }
 
-extension CodableValue: Codable {
+extension CodableRepresentation: Codable {
     /// Plain JSON. A whole `double` such as `2.0` may come back as `int`, which decodes the same.
     public func encode(to encoder: any Encoder) throws {
         var container = encoder.singleValueContainer()
@@ -163,15 +184,42 @@ extension CodableValue: Codable {
             self = .double(value)
         } else if let value = try? container.decode(String.self) {
             self = .string(value)
-        } else if let values = try? container.decode([CodableValue].self) {
+        } else if let values = try? container.decode([CodableRepresentation].self) {
             self = .array(values)
         } else {
-            self = .object(try container.decode([String: CodableValue].self))
+            self = .object(try container.decode([String: CodableRepresentation].self))
         }
     }
 }
 
-extension CodableValue: ExpressibleByNilLiteral, ExpressibleByBooleanLiteral, ExpressibleByIntegerLiteral, ExpressibleByFloatLiteral,
+extension CodableRepresentation {
+    /// Compact JSON, UTF-8 encoded, with keys sorted so equal representations give equal data. Throws for
+    /// a `double` that JSON can't hold, such as infinity.
+    public var data: Data {
+        get throws {
+            let encoder = JSONEncoder()
+            encoder.outputFormatting = [.sortedKeys, .withoutEscapingSlashes]
+            return try encoder.encode(self)
+        }
+    }
+
+    /// Compact JSON with keys sorted, as in `{"age":30,"name":"Ana"}`.
+    public var json: String {
+        get throws { String(decoding: try data, as: UTF8.self) }
+    }
+
+    /// The representation JSON `data` holds.
+    public init(data: Data) throws {
+        self = try JSONDecoder().decode(CodableRepresentation.self, from: data)
+    }
+
+    /// The representation a JSON string holds.
+    public init(json: String) throws {
+        try self.init(data: Data(json.utf8))
+    }
+}
+
+extension CodableRepresentation: ExpressibleByNilLiteral, ExpressibleByBooleanLiteral, ExpressibleByIntegerLiteral, ExpressibleByFloatLiteral,
     ExpressibleByStringLiteral, ExpressibleByArrayLiteral, ExpressibleByDictionaryLiteral
 {
     public init(nilLiteral: ()) { self = .null }
@@ -179,14 +227,14 @@ extension CodableValue: ExpressibleByNilLiteral, ExpressibleByBooleanLiteral, Ex
     public init(integerLiteral value: Int64) { self = .int(value) }
     public init(floatLiteral value: Double) { self = .double(value) }
     public init(stringLiteral value: String) { self = .string(value) }
-    public init(arrayLiteral elements: CodableValue...) { self = .array(elements) }
+    public init(arrayLiteral elements: CodableRepresentation...) { self = .array(elements) }
 
-    public init(dictionaryLiteral elements: (String, CodableValue)...) {
+    public init(dictionaryLiteral elements: (String, CodableRepresentation)...) {
         self = .object(Dictionary(elements, uniquingKeysWith: { _, last in last }))
     }
 }
 
-extension CodableValue {
+extension CodableRepresentation {
     /// The merge tree's data, without its merge kinds.
     init(_ tree: MergeTree) {
         self = switch tree {
@@ -196,16 +244,16 @@ extension CodableValue {
         case .uint(let value): .uint(value)
         case .double(let value): .double(value)
         case .string(let value): .string(value)
-        case .array(let values): .array(values.map(CodableValue.init))
-        case .object(let object): .object(object.mapValues(CodableValue.init))
-        case .merged(let data, _): CodableValue(data)
+        case .array(let values): .array(values.map(CodableRepresentation.init))
+        case .object(let object): .object(object.mapValues(CodableRepresentation.init))
+        case .merged(let data, _): CodableRepresentation(data)
         }
     }
 }
 
 extension MergeTree {
     /// A merge tree of this tree's data, with no merge kinds.
-    init(_ tree: CodableValue) {
+    init(_ tree: CodableRepresentation) {
         self = switch tree {
         case .null: .null
         case .bool(let value): .bool(value)

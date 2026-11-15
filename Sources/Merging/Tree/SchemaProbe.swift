@@ -59,12 +59,12 @@ final class SchemaProbe: Decoder {
         if let iterable = type as? any CaseIterable.Type {
             let cases = allCases(of: iterable)
             guard let first = cases.first as? T else { return nil }
-            kind = .enumeration(try cases.compactMap { $0 as? any Encodable }.map { try CodableValue(encoding: $0) })
+            kind = .enumeration(try cases.compactMap { $0 as? any Encodable }.map { try CodableRepresentation(encoding: $0) })
             return first
         }
         let instance: Any? = if type is UUID.Type { UUID() } else if type is URL.Type { URL(fileURLWithPath: "/") } else { nil }
         guard let value = instance as? T, let encodable = instance as? any Encodable else { return nil }
-        kind = CodableSchema(shapeOf: try CodableValue(encoding: encodable))
+        kind = CodableSchema(shapeOf: try CodableRepresentation(encoding: encodable))
         return value
     }
 

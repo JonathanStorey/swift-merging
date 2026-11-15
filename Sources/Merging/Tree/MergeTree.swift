@@ -1,4 +1,4 @@
-/// A value's `CodableValue`, marking the parts that merge by a kind of their own rather than by their shape:
+/// A value's `CodableRepresentation`, marking the parts that merge by a kind of their own rather than by their shape:
 /// sets and dictionaries. `TreeEncoder` makes one, and `TreeDecoder` reads it back.
 enum MergeTree: Equatable, Sendable {
     case null
