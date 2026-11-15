@@ -23,7 +23,7 @@ public indirect enum CodableSchema: Hashable, Sendable {
     /// A `Date`, which encodes as seconds since 2001.
     case date
     /// A `CaseIterable` enum, with each case's encoded value in `allCases` order.
-    case enumeration([CodableValue])
+    case enumeration([CodableRepresentation])
     case optional(CodableSchema)
     /// An array, with its elements' schema.
     case array(CodableSchema)
@@ -163,7 +163,7 @@ extension CodableSchema: Codable {
         case .optional: self = .optional(try container.decode(CodableSchema.self, forKey: tag))
         case .array: self = .array(try container.decode(CodableSchema.self, forKey: tag))
         case .set: self = .set(try container.decode(CodableSchema.self, forKey: tag))
-        case .enumeration: self = .enumeration(try container.decode([CodableValue].self, forKey: tag))
+        case .enumeration: self = .enumeration(try container.decode([CodableRepresentation].self, forKey: tag))
         case .dictionary: self = .dictionary(try container.decode(CodableSchema.self, forKey: tag))
         case .object: self = .object(try container.decode([String: CodableSchema].self, forKey: tag))
         }
@@ -187,7 +187,7 @@ extension CodableSchema: Codable {
 
 extension CodableSchema {
     /// The shape of one encoded value, for types the probe makes from a real instance.
-    init(shapeOf value: CodableValue) {
+    init(shapeOf value: CodableRepresentation) {
         self = switch value {
         case .null: .optional(.object([:]))
         case .bool: .bool

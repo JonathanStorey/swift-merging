@@ -8,7 +8,7 @@ import Foundation
 /// let both = try mine.merging(with: yours, from: original, favoring: .ours)   // sets merge by membership
 /// ```
 extension CodableDifference: Mergeable {
-    public typealias MergeBase = CodableValue
+    public typealias MergeBase = CodableRepresentation
 
     /// Both differences' changes, path by path. A change of the other side's is left out where it clashes
     /// with one of the favored side's: the same path changed differently, one path inside the other, or
@@ -23,17 +23,17 @@ extension CodableDifference: Mergeable {
         return CodableDifference(merged.sorted { $0.path.precedes($1.path) }, schemaID: schemaID)
     }
 
-    /// Both differences applied to `base` and merged as `CodableTotalMerge` does. A `CodableValue` doesn't
+    /// Both differences applied to `base` and merged as `CodableTotalMerge` does. A `CodableRepresentation` doesn't
     /// know which arrays are sets, so a set merges by position here. The overload that takes the typed
     /// value merges it by membership.
-    public func merging(with theirs: CodableDifference, from base: CodableValue, favoring side: MergeSide) throws -> CodableDifference {
+    public func merging(with theirs: CodableDifference, from base: CodableRepresentation, favoring side: MergeSide) throws -> CodableDifference {
         let schemaID = try matchingSchemaID(theirs)
         var ours = base
         ours.apply(self)
         var others = base
         others.apply(theirs)
         let merged = try MergeTree(ours).merging(with: MergeTree(others), from: MergeTree(base), favoring: side)
-        return CodableDifference(CodableValue(merged).difference(from: base).changes, schemaID: schemaID)
+        return CodableDifference(CodableRepresentation(merged).difference(from: base).changes, schemaID: schemaID)
     }
 
     /// Both differences applied to `base` and merged by `CodableTotalMerge`, so sets merge by membership and
@@ -127,7 +127,7 @@ private extension CodableDifference.Change {
     }
 
     /// The value at the path after this change, if there is one.
-    var newElement: CodableValue? {
+    var newElement: CodableRepresentation? {
         switch self {
         case .insert(_, let element), .replace(_, _, let element): element
         case .remove: nil
@@ -135,14 +135,14 @@ private extension CodableDifference.Change {
     }
 
     /// The value at the path before this change, if there was one.
-    var oldElement: CodableValue? {
+    var oldElement: CodableRepresentation? {
         switch self {
         case .remove(_, let element), .replace(_, let element, _): element
         case .insert: nil
         }
     }
 
-    func with(newElement: CodableValue) -> Self {
+    func with(newElement: CodableRepresentation) -> Self {
         switch self {
         case .insert(let path, _): .insert(path: path, element: newElement)
         case .replace(let path, let old, _): .replace(path: path, old: old, new: newElement)
@@ -150,7 +150,7 @@ private extension CodableDifference.Change {
         }
     }
 
-    func with(oldElement: CodableValue) -> Self {
+    func with(oldElement: CodableRepresentation) -> Self {
         switch self {
         case .remove(let path, _): .remove(path: path, element: oldElement)
         case .replace(let path, _, let new): .replace(path: path, old: oldElement, new: new)

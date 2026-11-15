@@ -89,7 +89,7 @@ import Testing
         let theirs = try CodableDifference(from: base, to: yours)
         let typed = try ours.merging(with: theirs, from: base, favoring: .ours)
         #expect(try base.applying(typed) == Note(title: "B", body: "y"))
-        let encodedBase: CodableValue = ["title": "A", "body": "x", "tags": ["a"]]
+        let encodedBase: CodableRepresentation = ["title": "A", "body": "x", "tags": ["a"]]
         let encoded = try ours.merging(with: theirs, from: encodedBase, favoring: .ours)
         #expect(try base.applying(encoded) == Note(title: "B", body: "y"))
 

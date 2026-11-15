@@ -30,15 +30,15 @@ extension CodableDifference {
     }
 }
 
-extension CodableValue {
+extension CodableRepresentation {
     /// The node at `path`, if the tree has one there. Setting it replaces that node, and setting `nil`
     /// removes it. Setting a path whose parent doesn't exist does nothing.
-    subscript(path: CodableDifference.Path) -> CodableValue? {
+    subscript(path: CodableDifference.Path) -> CodableRepresentation? {
         get { self[path.components[...]] }
         set { self[path.components[...]] = newValue }
     }
 
-    private subscript(components: ArraySlice<CodableDifference.Path.Component>) -> CodableValue? {
+    private subscript(components: ArraySlice<CodableDifference.Path.Component>) -> CodableRepresentation? {
         get {
             guard let first = components.first else { return self }
             return self[first]?[components.dropFirst()]
@@ -59,7 +59,7 @@ extension CodableValue {
         }
     }
 
-    private subscript(component: CodableDifference.Path.Component) -> CodableValue? {
+    private subscript(component: CodableDifference.Path.Component) -> CodableRepresentation? {
         get {
             switch component {
             case .key(let key): self[key]
@@ -79,11 +79,11 @@ extension CodableValue {
     /// ```swift
     /// tree.forEach { path, node in print(path, node) }
     /// ```
-    func forEach(_ body: (CodableDifference.Path, CodableValue) throws -> Void) rethrows {
+    func forEach(_ body: (CodableDifference.Path, CodableRepresentation) throws -> Void) rethrows {
         try walk(from: .root, body)
     }
 
-    private func walk(from path: CodableDifference.Path, _ body: (CodableDifference.Path, CodableValue) throws -> Void) rethrows {
+    private func walk(from path: CodableDifference.Path, _ body: (CodableDifference.Path, CodableRepresentation) throws -> Void) rethrows {
         try body(path, self)
         switch self {
         case .array(let array):

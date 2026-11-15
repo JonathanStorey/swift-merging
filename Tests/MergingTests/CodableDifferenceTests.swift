@@ -87,7 +87,7 @@ import Testing
         #expect(try original.applying(received) == edited)
 
         let small = try CodableDifference(from: [1, 2], to: [1, 3, 4])
-        let json = try JSONDecoder().decode(CodableValue.self, from: encoder.encode(small))
+        let json = try JSONDecoder().decode(CodableRepresentation.self, from: encoder.encode(small))
         guard case .object(let object) = json else { Issue.record("Expected an object, got \(json)"); return }
         let arrayID = try CodableSchema([Int].self).id
         #expect(object["schemaID"] == .string(arrayID.uuidString))
@@ -104,10 +104,10 @@ import Testing
         #expect(String(decoding: try encoder.encode(path), as: UTF8.self) == #"["config","v1.2",0]"#)
         #expect(try JSONDecoder().decode(CodableDifference.Path.self, from: encoder.encode(path)) == path)
 
-        let value: CodableValue = ["name": "Ana", "tags": ["a", nil], "age": 30, "ratio": 0.5, "on": true]
+        let value: CodableRepresentation = ["name": "Ana", "tags": ["a", nil], "age": 30, "ratio": 0.5, "on": true]
         #expect(String(decoding: try encoder.encode(value), as: UTF8.self)
             == #"{"age":30,"name":"Ana","on":true,"ratio":0.5,"tags":["a",null]}"#)
-        #expect(try JSONDecoder().decode(CodableValue.self, from: encoder.encode(value)) == value)
+        #expect(try JSONDecoder().decode(CodableRepresentation.self, from: encoder.encode(value)) == value)
     }
 
     @Test func recordsTheSchemaItWasMadeFrom() throws {

@@ -23,7 +23,7 @@ struct Trip {
 @Suite struct NodeMergeTests {
     let base = Contact()
 
-    @Test func byNodeMergesAnyCodableValue() {
+    @Test func byNodeMergesAnyCodableRepresentation() {
         let trip = Trip(place: Place(street: "Oak"))
         #expect(trip.$place.merging(with: Place(city: "Bergen"), from: Place()) == Place(street: "Oak", city: "Bergen"))
         #expect(trip.$place.merging(with: Place(street: "Pine"), from: Place()) == nil)
