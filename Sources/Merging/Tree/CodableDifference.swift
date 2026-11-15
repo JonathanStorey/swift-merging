@@ -1,3 +1,5 @@
+import Foundation
+
 /// What changed between two versions of a `Codable` value, shaped like `CollectionDifference`: a collection
 /// of changes, each at the deepest path where the versions differ, in path order.
 ///
@@ -34,13 +36,19 @@ public struct CodableDifference: RandomAccessCollection, Hashable, Sendable {
 
     let changes: [Change]
 
-    init(_ changes: [Change]) {
+    /// The `CodableSchema` id of the type the difference was made from, or `nil` if its schema can't
+    /// be read. `applying(_:)` refuses a difference made for another schema.
+    public let schemaID: UUID?
+
+    init(_ changes: [Change], schemaID: UUID? = nil) {
         self.changes = changes
+        self.schemaID = schemaID
     }
 
     /// The changes from `old` to `new`.
-    public init<Value: Encodable>(from old: Value, to new: Value) throws {
-        self = try CodableValue(encoding: new).difference(from: CodableValue(encoding: old))
+    public init<Value: Codable>(from old: Value, to new: Value) throws {
+        let changes = try CodableValue(encoding: new).difference(from: CodableValue(encoding: old)).changes
+        self.init(changes, schemaID: try? CodableSchema(Value.self).id)
     }
 
     public var startIndex: Int { changes.startIndex }
@@ -54,24 +62,30 @@ public struct CodableDifference: RandomAccessCollection, Hashable, Sendable {
     /// The difference that undoes this one: insertions become removals, removals insertions, and each
     /// replacement swaps its old and new values.
     public func inverse() -> CodableDifference {
-        CodableDifference(changes.map { change in
+        let changes = changes.map { change -> Change in
             switch change {
             case .insert(let path, let element): .remove(path: path, element: element)
             case .remove(let path, let element): .insert(path: path, element: element)
             case .replace(let path, let old, let new): .replace(path: path, old: new, new: old)
             }
-        })
+        }
+        return CodableDifference(changes, schemaID: schemaID)
     }
 }
 
 extension Encodable where Self: Decodable {
     /// This value with `difference` applied. A change whose path isn't in this value is skipped, and the
-    /// result must decode, or this throws the decoding error.
+    /// result must decode, or this throws the decoding error. A difference made for another schema
+    /// throws before anything is applied.
     ///
     /// ```swift
     /// let edited = try original.applying(CodableDifference(from: original, to: edited))
     /// ```
     public func applying(_ difference: CodableDifference) throws -> Self {
+        if let expected = difference.schemaID, let actual = try? CodableSchema(Self.self).id, expected != actual {
+            let reason = "The difference was made for schema \(expected), but \(Self.self) has schema \(actual)."
+            throw DecodingError.dataCorrupted(.init(codingPath: [], debugDescription: reason))
+        }
         var value = try CodableValue(encoding: self)
         value.apply(difference)
         return try value.decode()
@@ -82,14 +96,20 @@ extension Encodable where Self: Decodable {
 extension CodableDifference.Change: Codable {}
 
 extension CodableDifference: Codable {
-    /// The changes, as an array.
+    /// `{"schemaID": "…", "changes": [...]}`, leaving out a `nil` schema id.
     public func encode(to encoder: any Encoder) throws {
-        var container = encoder.singleValueContainer()
-        try container.encode(changes)
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encodeIfPresent(schemaID, forKey: .schemaID)
+        try container.encode(changes, forKey: .changes)
     }
 
     public init(from decoder: any Decoder) throws {
-        self.init(try decoder.singleValueContainer().decode([Change].self))
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.init(try container.decode([Change].self, forKey: .changes), schemaID: try container.decodeIfPresent(UUID.self, forKey: .schemaID))
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case schemaID, changes
     }
 }
 

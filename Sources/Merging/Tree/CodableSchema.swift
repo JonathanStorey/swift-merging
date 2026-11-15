@@ -1,3 +1,4 @@
+import Foundation
 import Synchronization
 
 /// The shape a `Decodable` type has when it's encoded: its properties, their kinds, and which are
@@ -74,6 +75,38 @@ extension CodableSchema: CustomStringConvertible {
         case .array(let element): "[\(element)]"
         case .dictionary(let element): "[string: \(element)]"
         case .object(let object): "{" + object.keys.sorted().map { "\($0): \(object[$0]!)" }.joined(separator: ", ") + "}"
+        }
+    }
+}
+
+extension CodableSchema: Identifiable {
+    /// A version 8 UUID derived from the schema, so equal schemas have equal ids on every device and
+    /// launch: a 128-bit FNV-1a hash of the schema's text, with the version and variant bits set.
+    public var id: UUID {
+        var hash: UInt128 = 0x6c62272e07bb014262b821756295c58d
+        for byte in canonicalText.utf8 {
+            hash ^= UInt128(byte)
+            hash &*= 0x0000000001000000000000000000013B
+        }
+        var bytes = withUnsafeBytes(of: hash.bigEndian) { Array($0) }
+        bytes[6] = bytes[6] & 0x0F | 0x80
+        bytes[8] = bytes[8] & 0x3F | 0x80
+        return UUID(uuid: (
+            bytes[0], bytes[1], bytes[2], bytes[3], bytes[4], bytes[5], bytes[6], bytes[7],
+            bytes[8], bytes[9], bytes[10], bytes[11], bytes[12], bytes[13], bytes[14], bytes[15]
+        ))
+    }
+
+    /// Like `description`, with keys quoted so no key can read as structure. The id hashes this, so it
+    /// must not change.
+    private var canonicalText: String {
+        switch self {
+        case .bool, .integer, .double, .string: description
+        case .optional(let wrapped): wrapped.canonicalText + "?"
+        case .array(let element): "[" + element.canonicalText + "]"
+        case .dictionary(let element): "[string: " + element.canonicalText + "]"
+        case .object(let object):
+            "{" + object.keys.sorted().map { "\($0.debugDescription): \(object[$0]!.canonicalText)" }.joined(separator: ", ") + "}"
         }
     }
 }
