@@ -27,7 +27,7 @@ extension Array where Element: Equatable {
     /// default only equal replacements merge. Any other replacement both sides made is `nil`.
     func mergingElements(
         with theirs: [Element], from base: [Element],
-        replaced: (Element, Element, Element) -> Element? = { $0 == $1 ? $0 : nil }
+        replaced: (Element, Element, Element) -> Element? = { ours, theirs, _ in ours == theirs ? ours : nil }
     ) -> [Element]? {
         let mine = Edits(self, from: base)
         let other = Edits(theirs, from: base)
