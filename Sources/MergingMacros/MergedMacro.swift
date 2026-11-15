@@ -70,6 +70,7 @@ private let shorthandStrategies = [
     "byWord": "StringWordMerge",
     "keep": "KeepMerge",
     "maximum": "ComparableMaximumMerge",
+    "mergeable": "MergeableMerge",
     "sum": "NumericSumMerge",
     "total": "CodableTotalMerge",
     "trueWins": "BoolTrueWinsMerge",

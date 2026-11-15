@@ -36,6 +36,8 @@ public enum MergeShorthand: Sendable {
     case keep(MergeSide)
     /// `ComparableMaximumMerge`: the larger value.
     case maximum
+    /// `MergeableMerge`: a `Mergeable` value by its own `merging`, favoring a side where both changed it.
+    case mergeable(favoring: MergeSide)
     /// `NumericSumMerge`: a counter, so both sides' changes count.
     case sum
     /// `CodableTotalMerge`: node by node, where a node both sides changed differently takes the favored side.
