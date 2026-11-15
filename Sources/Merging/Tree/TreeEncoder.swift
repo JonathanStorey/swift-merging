@@ -1,11 +1,7 @@
 /// Encodes a value as a `MergeTree`.
 struct TreeEncoder {
-    /// Whether the value is part of a larger one, so a `Mergeable` value brings its own merge. The value
-    /// being merged leaves it off, or its merge would call itself.
-    var isPart = false
-
     func encode<T: Encodable>(_ value: T) throws -> MergeTree {
-        let node = Node(codingPath: [], isPart: isPart)
+        let node = Node(codingPath: [])
         try node.store(value)
         return node.tree
     }
@@ -17,19 +13,17 @@ private final class Node: Encoder {
     let codingPath: [any CodingKey]
     var userInfo: [CodingUserInfoKey: Any] { [:] }
     private var value: MergeTree?
-    private var rule: MergeRule?
+    private var kind: MergeKind?
     private var keyed: [String: Node]?
     private var unkeyed: [Node]?
-    private let isPart: Bool
 
-    init(codingPath: [any CodingKey], isPart: Bool = true) {
+    init(codingPath: [any CodingKey]) {
         self.codingPath = codingPath
-        self.isPart = isPart
     }
 
     var tree: MergeTree {
         let data: MergeTree = if let keyed { .object(keyed.mapValues(\.tree)) } else if let unkeyed { .array(unkeyed.map(\.tree)) } else { value ?? .null }
-        return rule.map { .merged(data, $0) } ?? data
+        return kind.map { .merged(data, $0) } ?? data
     }
 
     func store(_ value: MergeTree) { self.value = value }
@@ -38,22 +32,11 @@ private final class Node: Encoder {
     func store(_ value: Double) { self.value = .double(value) }
     func store(_ value: Float) { self.value = .double(Double(value)) }
     func store<T: FixedWidthInteger & Encodable>(_ value: T) { self.value = MergeTree(value) }
-    /// Stores a value, with the rule it merges by: a `@Merged` strategy, a set's or dictionary's, or, for a
-    /// part of a value, a `Mergeable` type's own merge.
+    /// Stores a value, with the kind it merges by if it has one, such as a set's.
     func store<T: Encodable>(_ value: T) throws {
         try value.encode(to: self)
-        if let ruled = value as? any MergeRuled {
-            rule = ruled.mergeRule
-        } else if let defaulted = value as? any DefaultMergeRule {
-            rule = type(of: defaulted).defaultMergeRule
-        } else if isPart, let mergeable = value as? any Mergeable & Codable {
-            rule = Self.rule(for: mergeable)
-        }
-    }
-
-    private static func rule<M: Mergeable & Codable>(for value: M) -> MergeRule {
-        MergeRule(M.self) { ours, theirs, base in
-            if let base { ours.merging(with: theirs, from: base) } else { ours.merging(with: theirs) }
+        if let kinded = value as? any MergeKinded {
+            kind = type(of: kinded).mergeKind
         }
     }
 

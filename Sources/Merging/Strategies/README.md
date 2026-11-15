@@ -4,43 +4,39 @@
 | --- | --- | --- | --- | --- |
 | [`.byNode`](#bynode) | `CodableNodeMerge` | any `Codable` | node by node | yes |
 | [`.byElement`](#byelement) | `RangeReplaceableCollectionElementMerge` | arrays, `String` | element by element | yes |
-| [`.byKey`](#bykey) | `DictionaryKeyedMerge` | any `Codable` dictionary | key by key | yes |
+| [`.byKey`](#bykey) | `DictionaryKeyedMerge` | any `Dictionary` | key by key | yes |
 | [`.byMembership`](#bymembership) | `SetAlgebraMembershipMerge` | `Set`, any `OptionSet` | additions and removals from both | yes |
 | [`.byWord`](#byword) | `StringWordMerge` | `String` | word by word | yes |
-| [`.keep(.ours)`, `.keep(.theirs)`](#keep) | `KeepOursMerge`, `KeepTheirsMerge` | anything | the named side | no |
+| [`.keep(.ours)`, `.keep(.theirs)`](#keep) | `KeepMerge` | anything | the named side | no |
 | [`.maximum`](#maximum) | `ComparableMaximumMerge` | any `Comparable` | the larger | no |
 | [`.sum`](#sum) | `NumericSumMerge` | any `Numeric` | both changes added | yes |
 | [`.total(favoring:)`](#total) | `CodableTotalMerge` | any `Codable` | node by node, clashes to one side | no |
 | [`.trueWins`](#truewins) | `BoolTrueWinsMerge` | `Bool` | `true` if either is | no |
 | [`.union`](#union) | `SetAlgebraUnionMerge` | `Set`, any `OptionSet` | additions and removals from both | no |
 
-A strategy that **needs a base** only merges in a three-way merge. Without a base, only equal values merge,
-and any difference is a conflict. A strategy that doesn't need one merges any two versions.
+A strategy decides only when both sides changed a property. A side only one changed keeps that side, which
+needs the value to be `Equatable`. A strategy that **needs a base** only merges in a three-way merge.
+Without a base, only equal values merge, and any difference is a conflict. A strategy that doesn't need one
+merges any two versions. A conflict is `nil` from `merging` and `false` from `merge`.
 
 ## .byNode
 
-`CodableNodeMerge` is the structured merge that every `Codable` type conforming to `Mergeable` uses by
-default, with no code and no `@Merged`. It encodes the value into a tree, merges the tree node by node, and
-decodes the result.
+`CodableNodeMerge` is a structured merge for any `Codable` value. It encodes the value into a tree, merges
+the tree node by node, and decodes the result.
 
 Where both sides changed a node:
 
 - an object merges key by key;
-- an array merges element by element, as `.byElement` does;
+- an array merges element by element, as `.byElement` does, with an element both sides changed merging
+  node by node;
 - a `Set` merges `.byMembership`;
-- a `Dictionary` merges `.byKey`;
-- a `@Merged` property merges by its strategy;
-- a `Mergeable` property merges by its own type's merge;
+- a `Dictionary` merges key by key, whatever its key type, with a value both sides changed merging node
+  by node;
 - a `String`, number or `Bool` changed differently on both sides is a conflict.
 
 ```swift
-struct Settings: Codable, Mergeable {           // merges by node, with no code
-    var theme = "light"
-    var favorites: [String] = []
-}
-
-@Merged(.byNode) var booking = Booking()        // ignores Booking's own merge
-try CodableNodeMerge<Address>().merge(base: original, ours: mine, theirs: yours)
+@Merged(.byNode) var address: Address = Address()
+CodableNodeMerge<Address>().merge(base: original, ours: mine, theirs: yours)
 ```
 
 Merging an `Address` with a `street` and a `city`:
@@ -51,13 +47,11 @@ Merging an `Address` with a `street` and a `city`:
 | {Elm, Oslo} | {Oak, Oslo} | {Pine, Oslo} | conflict |
 | none | {Oak, Oslo} | {Elm, Oslo} | conflict |
 
-- **Good for:** any `Codable` value, including types from other libraries that can't be made `Mergeable`.
-- **Needs a base:** Yes. Without one, objects with the same keys merge key by key, and arrays of the same length element by
-  element. Only equal values merge, along with values whose strategy works without a base.
+- **Good for:** any `Codable` value, including types from other libraries.
+- **Needs a base:** Yes. Without one, objects with the same keys merge key by key, and arrays of the same
+  length element by element, so only equal values merge.
 - **Conflicts:** wherever both sides changed a plain value differently, or when the merged result doesn't
   decode, such as one that breaks a type's own validation.
-- **On a property:** it overrides that type's own `merging(with:from:)`. A plain `Codable` property already
-  merges by node, so the shorthand is only needed to override.
 - It encodes and decodes on every merge, which fits syncing better than tight loops.
 
 ## .byElement
@@ -80,25 +74,21 @@ ours first. On a `String`, it merges character by character.
 
 - **Good for:** ordered lists where position matters and duplicates are allowed, such as steps, playlists
   and layers.
-- **Needs a base:** Yes. Without one, on a property, lists of the same length merge element by element, so only equal
-  elements, or elements with a strategy of their own, merge. Called directly, only equal lists merge. An
-  inserted or removed element changes the length and is a conflict.
-- **An element both sides changed:** on a property, it merges by the element's own merge, so two people
-  editing different fields of the same item both keep their changes. Called directly, elements match by
-  `==`, so different replacements of the same element are a conflict.
+- **Needs a base:** Yes. Without one, only equal lists merge.
+- **An element both sides changed:** elements match by `==`, so different replacements of the same element
+  are a conflict. For a list of structs where two people edit different fields of the same item, use
+  `.byNode`, which merges that element node by node.
 - **Conflicts:** when both sides replaced the same element differently and the replacements can't merge,
   or without a base when the lengths differ. Different insertions at the same spot are both kept, ours
   first.
 - **Watch for:** moves. A move is a removal plus an insertion, so two people moving the same element to
   different places keep both copies.
-- Arrays already merge this way by default, so on an array the shorthand states intent. On a `String` it
-  changes the behavior, since text conflicts by default.
+- On a `String` it merges character by character. `.byWord` is usually the better fit for prose.
 
 ## .byKey
 
 `DictionaryKeyedMerge` merges a dictionary key by key, whatever the key's type. A key only one side added,
-changed or removed keeps that side. A key both sides changed merges its values, honoring any strategies
-inside them.
+changed or removed keeps that side. A key both sides changed merges only if they changed it alike.
 
 ```swift
 @Merged(.byKey) var pins: [Spot: String] = [:]
@@ -112,14 +102,11 @@ inside them.
 | none | [a: 1] | [a: 1, b: 2] | conflict |
 
 - **Good for:** settings by name, scores by player, any lookup table.
-- **Needs a base:** Yes. Without one, dictionaries with the same keys merge value by value. Different keys conflict, since
-  there's no telling an added key from a removed one.
-- **Conflicts:** when one side removed a key the other changed, when both changed a value that can't
-  merge, or without a base when the keys differ.
-- Every `Dictionary` merges this way by default. Struct keys work too: a dictionary whose keys aren't
-  `String` or `Int` encodes as a flat list, and this strategy lines the keys back up.
-- **Called directly**, it takes any `Codable` type written as a dictionary literal, such as an ordered
-  dictionary.
+- **Needs a base:** Yes. Without one, only equal dictionaries merge, since there's no telling an added key
+  from a removed one.
+- **Conflicts:** when one side removed a key the other changed, or both changed a value differently. For
+  values that are structs, use `.byNode`, which merges a value both sides changed node by node.
+- Any `Hashable` key works, including structs. The values must be `Equatable`.
 
 ## .byMembership
 
@@ -191,8 +178,8 @@ one side changed still keeps that change.
 
 ```swift
 @Merged(.maximum) var highScore = 0
-@Merged(.maximum) var lastSeen = Date.distantPast
-@Merged(.maximum) var level = Level(number: 1)    // a Comparable type of your own
+@Merged(.maximum) var lastSeen: Date = .distantPast
+@Merged(.maximum) var level: Level = Level(number: 1)    // a Comparable type of your own
 ```
 
 | Base | Ours | Theirs | Result |
@@ -238,7 +225,7 @@ still applies, from both sides, and a value both sides changed differently takes
 `git merge -X theirs` does.
 
 ```swift
-@Merged(.total(favoring: .theirs)) var place = Place()   // never a conflict
+@Merged(.total(favoring: .theirs)) var place: Place = Place()   // never a conflict
 ```
 
 | Base | Ours | Theirs | `favoring: .ours` | `favoring: .theirs` |
@@ -250,13 +237,11 @@ still applies, from both sides, and a value both sides changed differently takes
 - **Good for:** a sync engine's default merge, which must always produce a record.
 - **Needs a base:** No. Without one, every difference takes the favored side.
 - **Conflicts:** never. Its `merge` never returns `nil`. A result that doesn't decode keeps that whole side.
-- **Called directly**, the side is a type, so a sync engine that knows which side is newer picks one for
+- **Called directly**, the side is a value, so a sync engine that knows which side is newer picks one for
   each merge:
 
 ```swift
-let merged = oursIsNewer
-    ? CodableTotalMerge<Note, OursSide>().merge(base: base, ours: mine, theirs: yours)
-    : CodableTotalMerge<Note, TheirsSide>().merge(base: base, ours: mine, theirs: yours)
+let merged = CodableTotalMerge<Note>(favoring: oursIsNewer ? .ours : .theirs).merge(base: base, ours: mine, theirs: yours)
 ```
 
 ## .trueWins

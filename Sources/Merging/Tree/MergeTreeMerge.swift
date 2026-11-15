@@ -9,16 +9,15 @@ extension MergeTree {
     }
 
     /// Merges `theirs` into this tree, which is ours, knowing their common ancestor. A part only one side
-    /// changed keeps that side. Where both did, a part with a rule merges by it, objects merge key by key and
+    /// changed keeps that side. Where both did, a set merges by membership and a dictionary by key, objects merge key by key and
     /// arrays element by element, and anything else is a conflict, or keeps `side` when there is one.
     func merging(with theirs: MergeTree, from base: MergeTree, favoring side: MergeSide?) throws(MergeClash) -> MergeTree {
         if theirs == base { return self }
         if self == base { return theirs }
         do throws(MergeClash) {
-            // Both sides changed it. Equal changes still go to a rule, since a counter both sides added one
-            // to has gone up by two.
+            // Both sides changed it.
             switch (self, theirs, base) {
-            case let (.merged(ours, rule), .merged(theirs, _), .merged(base, _)): return .merged(try rule.merge(ours, theirs, base), rule)
+            case let (.merged(ours, kind), .merged(theirs, _), .merged(base, _)): return .merged(try kind.merge(ours, theirs, base: base), kind)
             case let (.object(ours), .object(theirs), .object(base)): return .object(try Self.merge(ours, theirs, base: base, favoring: side))
             case let (.array(ours), .array(theirs), .array(base)): return .array(try Self.merge(ours, theirs, base: base, favoring: side))
             default:
@@ -31,14 +30,15 @@ extension MergeTree {
         }
     }
 
-    /// Merges without a common ancestor, so only what's equal, or what has a rule for merging without one.
+    /// Merges without a common ancestor, so only what's equal: objects with the same keys, arrays of the
+    /// same length, and sets with the same elements in any order.
     /// Anything else is a conflict, or keeps `side` when there is one.
     func merging(with theirs: MergeTree, favoring side: MergeSide?) throws(MergeClash) -> MergeTree {
         if self == theirs { return self }
         do throws(MergeClash) {
             switch (self, theirs) {
-            case let (.merged(ours, rule), .merged(theirs, _)):
-                return .merged(try rule.merge(ours, theirs, nil), rule)
+            case let (.merged(ours, kind), .merged(theirs, _)):
+                return .merged(try kind.merge(ours, theirs, base: nil), kind)
             case let (.object(ours), .object(theirs)) where Set(ours.keys) == Set(theirs.keys):
                 var merged: [String: MergeTree] = [:]
                 for (key, value) in ours { merged[key] = try value.merging(with: theirs[key]!, favoring: side) }
@@ -83,75 +83,67 @@ extension MergeTree {
         return merged
     }
 
-    /// Merges element by element, like a three-way merge of lines, with replacements both sides made
-    /// merging by the elements' own merge.
+    /// Merges element by element, like a three-way merge of lines, with an element both sides replaced
+    /// merging by its shape.
     private static func merge(
         _ ours: [MergeTree], _ theirs: [MergeTree], base: [MergeTree], favoring side: MergeSide?
     ) throws(MergeClash) -> [MergeTree] {
-        try mergeElements(ours, theirs, base: base) { ours, theirs, base throws(MergeClash) in
-            try ours.merging(with: theirs, from: base, favoring: side)
-        } conflict: { base, ours, theirs in
-            MergeClash()
+        let merged = ours.mergingElements(with: theirs, from: base) { ours, theirs, base in
+            try? ours.merging(with: theirs, from: base, favoring: side)
+        }
+        guard let merged else { throw MergeClash() }
+        return merged
+    }
+}
+
+extension MergeKind {
+    /// Merges two versions of a part of this kind, with or without a base.
+    func merge(_ ours: MergeTree, _ theirs: MergeTree, base: MergeTree?) throws(MergeClash) -> MergeTree {
+        switch self {
+        case .set: try MergeTree.mergeSets(ours, theirs, base: base)
+        case .dictionary: try MergeTree.mergeDictionaries(ours, theirs, base: base)
         }
     }
 }
 
-/// Merges element by element, like a three-way merge of lines. An element either side removed is removed,
-/// and what each side inserted goes where it was inserted, ours first. Where both sides replaced the same
-/// element with one element each, `replaced` merges those two; any other replacement both sides made is a
-/// conflict.
-func mergeElements<Element: Equatable, Failure: Error>(
-    _ ours: [Element], _ theirs: [Element], base: [Element],
-    replaced: (Element, Element, Element) throws(Failure) -> Element,
-    conflict: (Element, [Element], [Element]) -> Failure
-) throws(Failure) -> [Element] {
-    let mine = Edits(ours, from: base)
-    let other = Edits(theirs, from: base)
-    var merged: [Element] = []
-    for index in 0...base.count {
-        let (inserted, theirsInserted) = (mine.inserted[index], other.inserted[index])
-        if inserted == theirsInserted || theirsInserted.isEmpty {
-            merged += inserted
-        } else if inserted.isEmpty {
-            merged += theirsInserted
-        } else if index < base.count, mine.removed.contains(index), other.removed.contains(index) {
-            // Both replaced the element that follows.
-            guard inserted.count == 1, theirsInserted.count == 1 else { throw conflict(base[index], inserted, theirsInserted) }
-            merged.append(try replaced(inserted[0], theirsInserted[0], base[index]))
-        } else {
-            merged += inserted + theirsInserted
+extension MergeTree {
+    /// Merges a set by membership, matching elements by their canonical text, since a set encodes in no
+    /// particular order. Without a base, only sets with the same elements merge.
+    fileprivate static func mergeSets(_ ours: MergeTree, _ theirs: MergeTree, base: MergeTree?) throws(MergeClash) -> MergeTree {
+        guard case .array(let mine) = ours, case .array(let other) = theirs else { throw MergeClash() }
+        let (mineKeys, otherKeys) = (Set(mine.map(\.canonical)), Set(other.map(\.canonical)))
+        guard let base else {
+            guard mineKeys == otherKeys else { throw MergeClash() }
+            return ours
         }
-        if index < base.count, !mine.removed.contains(index), !other.removed.contains(index) {
-            merged.append(base[index])
-        }
+        guard case .array(let original) = base else { throw MergeClash() }
+        let baseKeys = Set(original.map(\.canonical))
+        let kept = mine.filter { otherKeys.contains($0.canonical) || !baseKeys.contains($0.canonical) }
+        let added = other.filter { !mineKeys.contains($0.canonical) && !baseKeys.contains($0.canonical) }
+        return .array(kept + added)
     }
-    return merged
-}
 
-/// One side's changes to an array: the base elements it removed, and what it inserted before each base
-/// element, with the last slot for what it added at the end. A changed element is removed, with its new
-/// version inserted before it.
-private struct Edits<Element: Equatable> {
-    var removed: Set<Int> = []
-    var inserted: [[Element]]
-
-    init(_ side: [Element], from base: [Element]) {
-        inserted = Array(repeating: [], count: base.count + 1)
-        var insertedOffsets: Set<Int> = []
-        for change in side.difference(from: base) {
-            switch change {
-            case .remove(let offset, _, _): removed.insert(offset)
-            case .insert(let offset, _, _): insertedOffsets.insert(offset)
-            }
+    /// Merges a dictionary key by key. One with string or integer keys is already an object. Any other is a
+    /// flat array of keys and values, which merges as an object keyed by each key's canonical text.
+    fileprivate static func mergeDictionaries(_ ours: MergeTree, _ theirs: MergeTree, base: MergeTree?) throws(MergeClash) -> MergeTree {
+        guard case .array = ours else {
+            if let base { return try ours.merging(with: theirs, from: base) }
+            return try ours.merging(with: theirs)
         }
-        // The side's other elements are the base's kept ones, in order.
-        var next = 0
-        for index in 0...base.count {
-            while insertedOffsets.contains(next) {
-                inserted[index].append(side[next])
-                next += 1
+        var keys: [String: MergeTree] = [:]
+        func object(_ tree: MergeTree) throws(MergeClash) -> MergeTree {
+            guard case .array(let flat) = tree, flat.count.isMultiple(of: 2) else { throw MergeClash() }
+            var object: [String: MergeTree] = [:]
+            for index in stride(from: 0, to: flat.count, by: 2) {
+                let text = flat[index].canonical
+                keys[text] = flat[index]
+                object[text] = flat[index + 1]
             }
-            if index < base.count, !removed.contains(index) { next += 1 }
+            return .object(object)
         }
+        let (mine, other) = (try object(ours), try object(theirs))
+        let merged = if let base { try mine.merging(with: other, from: object(base)) } else { try mine.merging(with: other) }
+        guard case .object(let entries) = merged else { return ours }
+        return .array(entries.flatMap { [keys[$0.key]!, $0.value] })
     }
 }

@@ -26,6 +26,8 @@ public enum MergeShorthand: Sendable {
     case byElement
     /// `DictionaryKeyedMerge`: a dictionary key by key.
     case byKey
+    /// `CodableNodeMerge`: any `Codable` value node by node, through its stored form.
+    case byNode
     /// `SetAlgebraMembershipMerge`: a set by what each side added and removed.
     case byMembership
     /// `StringWordMerge`: text word by word.
@@ -36,6 +38,8 @@ public enum MergeShorthand: Sendable {
     case maximum
     /// `NumericSumMerge`: a counter, so both sides' changes count.
     case sum
+    /// `CodableTotalMerge`: node by node, where a node both sides changed differently takes the favored side.
+    case total(favoring: MergeSide)
     /// `BoolTrueWinsMerge`: `true` if either side is.
     case trueWins
     /// `SetAlgebraUnionMerge`: a set that keeps every addition, with or without a base.

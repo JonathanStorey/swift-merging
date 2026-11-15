@@ -15,10 +15,9 @@ struct Profile: Codable {
 let nickname = mine.$nickname.merging(with: yours.nickname, from: original.nickname)
 ```
 
-> **Being rewritten.** Merging is moving to property-level merging with the `@Merged` macro, which works
-> the same on a struct, a class, or a SwiftData `@Model`. The strategies of 0.3.0 are being ported one at a
-> time and sit in `Sources/Merging/Unported` until they are. Use the `0.3.0` tag for the property wrapper
-> and whole-value merging.
+> **0.4.0 rewrite.** Merging is property-level now, with the `@Merged` macro, which works the same on a
+> struct, a class, or a SwiftData `@Model`. Use the `0.3.0` tag for the property wrapper and whole-value
+> merging.
 
 ## @Merged
 
@@ -55,17 +54,19 @@ number, or `true`/`false` literal, so `@Merged(.keep(.ours)) var total = makeTot
 | --- | --- | --- | --- | --- |
 | `.byElement` | `RangeReplaceableCollectionElementMerge` | arrays, `String` | element by element | yes |
 | `.byKey` | `DictionaryKeyedMerge` | any `Dictionary` | key by key | yes |
+| `.byNode` | `CodableNodeMerge` | any `Codable` | node by node | yes |
 | `.byMembership` | `SetAlgebraMembershipMerge` | `Set`, any `OptionSet` | additions and removals from both | yes |
 | `.byWord` | `StringWordMerge` | `String` | word by word | yes |
 | `.keep(.ours)`, `.keep(.theirs)` | `KeepMerge` | anything | the named side | no |
 | `.maximum` | `ComparableMaximumMerge` | any `Comparable` | the larger | no |
 | `.sum` | `NumericSumMerge` | any `Numeric` | both changes added | yes |
+| `.total(favoring:)` | `CodableTotalMerge` | any `Codable` | node by node, clashes to one side | no |
 | `.trueWins` | `BoolTrueWinsMerge` | `Bool` | `true` if either is | no |
 | `.union` | `SetAlgebraUnionMerge` | `Set`, any `OptionSet` | additions and removals from both, everything without a base | no |
 
 A strategy that needs a base merges only equal values in a two-way merge. `.byElement`, `.byKey` and
-`.byWord` match by `==`, so a place both sides changed differently can't be merged. `.byNode` and
-`.total(favoring:)` arrive with the next step of the rewrite.
+`.byWord` match by `==`, so a place both sides changed differently can't be merged. `.byNode` merges such a
+place node by node instead. [Strategies](Sources/Merging/Strategies/README.md) shows each one with examples.
 
 The shorthand is a `MergeShorthand`. Most strategies are generic over the property's type, which an
 attribute can't see, so the macro writes the shorthand out as its strategy: `.keep(.ours)` on a `String`
