@@ -97,6 +97,8 @@ value.
 let representation = try CodableRepresentation(encoding: person)
 let fields = representation.dictionary()                         // ["age": 30, "name": "Ana", ...]
 let rebuilt = try CodableRepresentation.object(fields!).decode(as: Person.self)
+let json = try representation.json                               // {"age":30,"name":"Ana"}, keys sorted
+let same = try CodableRepresentation(data: representation.data)
 ```
 
 ## Differences

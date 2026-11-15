@@ -1,3 +1,5 @@
+import Foundation
+
 /// A value's stored form, as JSON would hold it: what its `Codable` conformance encodes, without the
 /// formatting. It's the element of a `CodableDifference`, and `dictionary()` gives an object's fields.
 ///
@@ -187,6 +189,33 @@ extension CodableRepresentation: Codable {
         } else {
             self = .object(try container.decode([String: CodableRepresentation].self))
         }
+    }
+}
+
+extension CodableRepresentation {
+    /// Compact JSON, UTF-8 encoded, with keys sorted so equal representations give equal data. Throws for
+    /// a `double` that JSON can't hold, such as infinity.
+    public var data: Data {
+        get throws {
+            let encoder = JSONEncoder()
+            encoder.outputFormatting = [.sortedKeys, .withoutEscapingSlashes]
+            return try encoder.encode(self)
+        }
+    }
+
+    /// Compact JSON with keys sorted, as in `{"age":30,"name":"Ana"}`.
+    public var json: String {
+        get throws { String(decoding: try data, as: UTF8.self) }
+    }
+
+    /// The representation JSON `data` holds.
+    public init(data: Data) throws {
+        self = try JSONDecoder().decode(CodableRepresentation.self, from: data)
+    }
+
+    /// The representation a JSON string holds.
+    public init(json: String) throws {
+        try self.init(data: Data(json.utf8))
     }
 }
 

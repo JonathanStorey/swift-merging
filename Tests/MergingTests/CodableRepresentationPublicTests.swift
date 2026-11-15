@@ -1,4 +1,5 @@
 // Not `@testable`, so these tests only see the public surface.
+import Foundation
 import Merging
 import Testing
 
@@ -30,5 +31,14 @@ import Testing
     @Test func onlyAnObjectHasADictionary() throws {
         #expect(try CodableRepresentation(encoding: 3).dictionary() == nil)
         #expect(try CodableRepresentation(encoding: ["a"]).dictionary() == nil)
+    }
+
+    @Test func jsonAndDataRoundTrip() throws {
+        let representation = try CodableRepresentation(encoding: Person())
+        #expect(try representation.json == #"{"age":30,"child":{"name":"Bo"},"name":"Ana"}"#)
+        #expect(try CodableRepresentation(json: representation.json) == representation)
+        #expect(try CodableRepresentation(data: representation.data) == representation)
+        #expect(try CodableRepresentation(json: "[1, null, \"a/b\"]") == [1, nil, "a/b"])
+        #expect(try CodableRepresentation.string("a/b").json == #""a/b""#)
     }
 }
