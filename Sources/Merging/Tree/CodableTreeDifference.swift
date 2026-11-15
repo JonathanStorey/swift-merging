@@ -1,11 +1,11 @@
 extension CodableTree {
     /// One difference between two trees, at the deepest path where they differ.
-    public enum Change: Hashable, Sendable {
+    enum Change: Hashable, Sendable {
         case added(Path, CodableTree)
         case removed(Path, CodableTree)
         case changed(Path, from: CodableTree, to: CodableTree)
 
-        public var path: Path {
+        var path: Path {
             switch self {
             case .added(let path, _), .removed(let path, _), .changed(let path, _, _): path
             }
@@ -19,7 +19,7 @@ extension CodableTree {
     /// let changes = try CodableTree(encoding: edited).difference(from: CodableTree(encoding: original))
     /// changes.map(\.description)             // ["~ age: 30 → 31", "+ tags[2]: \"c\""]
     /// ```
-    public func difference(from other: CodableTree) -> [Change] {
+    func difference(from other: CodableTree) -> [Change] {
         var changes: [Change] = []
         Self.collect(from: other, to: self, at: .root, into: &changes)
         return changes
@@ -56,7 +56,7 @@ extension CodableTree {
 
 extension CodableTree.Change: CustomStringConvertible {
     /// `+` for added, `-` for removed and `~` for changed, then the path and the values.
-    public var description: String {
+    var description: String {
         switch self {
         case .added(let path, let value): "+ \(path): \(value)"
         case .removed(let path, let value): "- \(path): \(value)"

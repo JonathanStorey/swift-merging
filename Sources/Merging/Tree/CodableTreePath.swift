@@ -6,31 +6,31 @@ extension CodableTree {
     /// tree[path]?.string                                  // "Oslo"
     /// print(["tags", 2] as CodableTree.Path)             // tags[2]
     /// ```
-    public struct Path: Hashable, Sendable {
-        public enum Component: Hashable, Sendable {
+    struct Path: Hashable, Sendable {
+        enum Component: Hashable, Sendable {
             /// An object's property or entry.
             case key(String)
             /// An array's element.
             case index(Int)
         }
 
-        public var components: [Component]
+        var components: [Component]
 
-        public init(_ components: [Component] = []) {
+        init(_ components: [Component] = []) {
             self.components = components
         }
 
         /// The path to the tree itself.
-        public static let root = Path()
+        static let root = Path()
 
-        public func appending(_ component: Component) -> Path {
+        func appending(_ component: Component) -> Path {
             Path(components + [component])
         }
     }
 
     /// The node at `path`, if the tree has one there. Setting it replaces that node, and setting `nil`
     /// removes it. Setting a path whose parent doesn't exist does nothing.
-    public subscript(path: Path) -> CodableTree? {
+    subscript(path: Path) -> CodableTree? {
         get { self[path.components[...]] }
         set { self[path.components[...]] = newValue }
     }
@@ -76,7 +76,7 @@ extension CodableTree {
     /// ```swift
     /// tree.forEach { path, node in print(path, node) }
     /// ```
-    public func forEach(_ body: (Path, CodableTree) throws -> Void) rethrows {
+    func forEach(_ body: (Path, CodableTree) throws -> Void) rethrows {
         try walk(from: .root, body)
     }
 
@@ -94,19 +94,19 @@ extension CodableTree {
 }
 
 extension CodableTree.Path: ExpressibleByArrayLiteral {
-    public init(arrayLiteral components: Component...) {
+    init(arrayLiteral components: Component...) {
         self.init(components)
     }
 }
 
 extension CodableTree.Path.Component: ExpressibleByStringLiteral, ExpressibleByIntegerLiteral {
-    public init(stringLiteral key: String) { self = .key(key) }
-    public init(integerLiteral index: Int) { self = .index(index) }
+    init(stringLiteral key: String) { self = .key(key) }
+    init(integerLiteral index: Int) { self = .index(index) }
 }
 
 extension CodableTree.Path: CustomStringConvertible {
     /// Keys joined with dots and indices in brackets, as in `items[0].title`. The root is `.`.
-    public var description: String {
+    var description: String {
         guard !components.isEmpty else { return "." }
         var text = ""
         for component in components {

@@ -21,9 +21,8 @@ let package = Package(
             .product(name: "SwiftDiagnostics", package: "swift-syntax"),
             .product(name: "SwiftCompilerPlugin", package: "swift-syntax"),
         ]),
-        // `Unported` holds the strategies and the tree code that the rewrite hasn't moved over yet.
-        .target(name: "Merging", dependencies: ["MergingMacros"], exclude: ["Unported"]),
-        .testTarget(name: "MergingTests", dependencies: ["Merging"], exclude: ["Unported"]),
+        .target(name: "Merging", dependencies: ["MergingMacros"], exclude: ["Strategies/README.md"]),
+        .testTarget(name: "MergingTests", dependencies: ["Merging"]),
         .testTarget(name: "MergingMacrosTests", dependencies: [
             "MergingMacros",
             .product(name: "SwiftSyntaxMacroExpansion", package: "swift-syntax"),
