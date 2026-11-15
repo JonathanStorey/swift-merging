@@ -41,6 +41,8 @@ final class Draft {
         #expect(ours.$cachedTotal.merging(with: theirs.cachedTotal, from: base.cachedTotal) == 3)
         #expect(ours.$tags.merging(with: theirs.tags, from: base.tags) == ["a", "b"])
         #expect(ours.$note.merging(with: theirs.note, from: base.note) == "theirs")
+        // An optional property's base is the property's own type, so a `nil` base is a value, not "no base".
+        #expect(Profile(note: "mine").$note.merging(with: nil, from: nil) == "mine")
     }
 
     @Test func aSideOnlyOneChangedKeepsThatSide() {
@@ -65,10 +67,10 @@ final class Draft {
 
     @Test func withoutABase() {
         let ours = Profile(nickname: "annie", title: "Hello")
-        #expect(ours.$nickname.merging(with: "anna", from: nil) == "annie")
+        #expect(ours.$nickname.merging(with: "anna") == "annie")
         // A strategy that needs a base merges only equal values without one.
-        #expect(ours.$title.merging(with: "Hello", from: nil) == "Hello")
-        #expect(ours.$title.merging(with: "Hey", from: nil) == nil)
+        #expect(ours.$title.merging(with: "Hello") == "Hello")
+        #expect(ours.$title.merging(with: "Hey") == nil)
     }
 
     @Test func worksInAClassAndOnAStaticProperty() {

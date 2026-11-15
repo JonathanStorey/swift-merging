@@ -27,13 +27,14 @@ and its strategy. The property itself is left as written, so it stores, encodes,
 would without the macro.
 
 ```swift
-public func merging(with theirs: Value, from base: Value?) -> Value?
+public func merging(with theirs: Value, from base: Value) -> Value?    // three-way
+public func merging(with theirs: Value) -> Value?                      // two-way
 ```
 
 - A side only one changed keeps that side, and the strategy decides when both did. Equal changes still go
   to the strategy, since a counter both sides raised by 1 has gone up by 2. That check needs an
   `Equatable` value. For any other value, the strategy decides every merge.
-- Without a `base` it's a two-way merge. A strategy that needs a base merges only equal values without one.
+- The two-way merge has no base. A strategy that needs a base merges only equal values without one.
 - `nil` means the versions can't be merged.
 
 `$name` has the property's access level. The property's type comes from its annotation, or from a string,
