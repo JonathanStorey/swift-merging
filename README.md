@@ -105,6 +105,10 @@ let undone = try edited.applying(difference.inverse())     // == original
 Objects compare key by key and arrays index by index, so an element inserted mid-array shows as
 replacements of the ones after it.
 
+A difference is `Codable`, so it can be saved or sent to another device and applied there. It encodes as
+an array of changes, each naming its case, with paths as arrays and values as plain JSON:
+`[{"replace": {"path": ["age"], "old": 30, "new": 31}}]`.
+
 ## Schemas
 
 `CodableSchema` reads the shape of a `Decodable` type from the type alone: each property's kind, and which

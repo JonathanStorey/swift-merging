@@ -78,6 +78,21 @@ extension Encodable where Self: Decodable {
     }
 }
 
+/// A change as a single-key object naming its case: `{"replace": {"path": ["age"], "old": 30, "new": 31}}`.
+extension CodableDifference.Change: Codable {}
+
+extension CodableDifference: Codable {
+    /// The changes, as an array.
+    public func encode(to encoder: any Encoder) throws {
+        var container = encoder.singleValueContainer()
+        try container.encode(changes)
+    }
+
+    public init(from decoder: any Decoder) throws {
+        self.init(try decoder.singleValueContainer().decode([Change].self))
+    }
+}
+
 extension CodableDifference.Change: CustomStringConvertible {
     /// `+` for an insertion, `-` for a removal and `~` for a replacement, then the path and the values.
     public var description: String {

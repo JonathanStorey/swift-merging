@@ -1,4 +1,5 @@
 // Not `@testable`, so these tests only see the public surface.
+import Foundation
 import Merging
 import Testing
 
@@ -74,5 +75,32 @@ import Testing
         #expect(("[2][1]" as CodableDifference.Path).components == [.index(2), .index(1)])
         #expect(("." as CodableDifference.Path).components.isEmpty)
         #expect((["config", "v1.2"] as CodableDifference.Path).components == [.key("config"), .key("v1.2")])
+    }
+
+    @Test func travelsAsJSON() throws {
+        let difference = try CodableDifference(from: original, to: edited)
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = .sortedKeys
+        let data = try encoder.encode(difference)
+        let received = try JSONDecoder().decode(CodableDifference.self, from: data)
+        #expect(received == difference)
+        #expect(try original.applying(received) == edited)
+
+        let small = try CodableDifference(from: [1, 2], to: [1, 3, 4])
+        #expect(String(decoding: try encoder.encode(small), as: UTF8.self)
+            == #"[{"replace":{"new":3,"old":2,"path":[1]}},{"insert":{"element":4,"path":[2]}}]"#)
+    }
+
+    @Test func pathsAndValuesEncodeAsPlainJSON() throws {
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = .sortedKeys
+        let path: CodableDifference.Path = ["config", "v1.2", 0]
+        #expect(String(decoding: try encoder.encode(path), as: UTF8.self) == #"["config","v1.2",0]"#)
+        #expect(try JSONDecoder().decode(CodableDifference.Path.self, from: encoder.encode(path)) == path)
+
+        let value: CodableValue = ["name": "Ana", "tags": ["a", nil], "age": 30, "ratio": 0.5, "on": true]
+        #expect(String(decoding: try encoder.encode(value), as: UTF8.self)
+            == #"{"age":30,"name":"Ana","on":true,"ratio":0.5,"tags":["a",null]}"#)
+        #expect(try JSONDecoder().decode(CodableValue.self, from: encoder.encode(value)) == value)
     }
 }

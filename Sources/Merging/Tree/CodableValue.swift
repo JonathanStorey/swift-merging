@@ -133,6 +133,44 @@ extension CodableValue: CustomStringConvertible {
     }
 }
 
+extension CodableValue: Codable {
+    /// Plain JSON. A whole `double` such as `2.0` may come back as `int`, which decodes the same.
+    public func encode(to encoder: any Encoder) throws {
+        var container = encoder.singleValueContainer()
+        switch self {
+        case .null: try container.encodeNil()
+        case .bool(let value): try container.encode(value)
+        case .int(let value): try container.encode(value)
+        case .uint(let value): try container.encode(value)
+        case .double(let value): try container.encode(value)
+        case .string(let value): try container.encode(value)
+        case .array(let values): try container.encode(values)
+        case .object(let object): try container.encode(object)
+        }
+    }
+
+    public init(from decoder: any Decoder) throws {
+        let container = try decoder.singleValueContainer()
+        if container.decodeNil() {
+            self = .null
+        } else if let value = try? container.decode(Bool.self) {
+            self = .bool(value)
+        } else if let value = try? container.decode(Int64.self) {
+            self = .int(value)
+        } else if let value = try? container.decode(UInt64.self) {
+            self = .uint(value)
+        } else if let value = try? container.decode(Double.self) {
+            self = .double(value)
+        } else if let value = try? container.decode(String.self) {
+            self = .string(value)
+        } else if let values = try? container.decode([CodableValue].self) {
+            self = .array(values)
+        } else {
+            self = .object(try container.decode([String: CodableValue].self))
+        }
+    }
+}
+
 extension CodableValue: ExpressibleByNilLiteral, ExpressibleByBooleanLiteral, ExpressibleByIntegerLiteral, ExpressibleByFloatLiteral,
     ExpressibleByStringLiteral, ExpressibleByArrayLiteral, ExpressibleByDictionaryLiteral
 {
