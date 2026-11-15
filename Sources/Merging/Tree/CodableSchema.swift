@@ -21,8 +21,10 @@ public indirect enum CodableSchema: Hashable, Sendable {
     case double
     case string
     case optional(CodableSchema)
-    /// An array or set, with its elements' schema.
+    /// An array, with its elements' schema.
     case array(CodableSchema)
+    /// A set, which encodes as an array in no particular order and merges by membership.
+    case set(CodableSchema)
     /// A dictionary keyed by `String` or `Int`, with its values' schema.
     case dictionary(CodableSchema)
     /// A struct or class, by property.
@@ -53,7 +55,7 @@ public indirect enum CodableSchema: Hashable, Sendable {
             case (.key(let key), .object(let object)):
                 guard let property = object[key] else { return nil }
                 schema = property
-            case (.key, .dictionary(let element)), (.index, .array(let element)):
+            case (.key, .dictionary(let element)), (.index, .array(let element)), (.index, .set(let element)):
                 schema = element
             default:
                 return nil
@@ -64,7 +66,7 @@ public indirect enum CodableSchema: Hashable, Sendable {
 }
 
 extension CodableSchema: CustomStringConvertible {
-    /// Swift-like: `string?`, `[integer]`, `[string: bool]`, and objects as `{name: string}` with keys sorted.
+    /// Swift-like: `string?`, `[integer]`, `set<string>`, `[string: bool]`, and objects as `{name: string}` with keys sorted.
     public var description: String {
         switch self {
         case .bool: "bool"
@@ -73,6 +75,7 @@ extension CodableSchema: CustomStringConvertible {
         case .string: "string"
         case .optional(let wrapped): "\(wrapped)?"
         case .array(let element): "[\(element)]"
+        case .set(let element): "set<\(element)>"
         case .dictionary(let element): "[string: \(element)]"
         case .object(let object): "{" + object.keys.sorted().map { "\($0): \(object[$0]!)" }.joined(separator: ", ") + "}"
         }
@@ -104,6 +107,7 @@ extension CodableSchema: Identifiable {
         case .bool, .integer, .double, .string: description
         case .optional(let wrapped): wrapped.canonicalText + "?"
         case .array(let element): "[" + element.canonicalText + "]"
+        case .set(let element): "set<" + element.canonicalText + ">"
         case .dictionary(let element): "[string: " + element.canonicalText + "]"
         case .object(let object):
             "{" + object.keys.sorted().map { "\($0.debugDescription): \(object[$0]!.canonicalText)" }.joined(separator: ", ") + "}"
@@ -113,13 +117,13 @@ extension CodableSchema: Identifiable {
 
 extension CodableSchema: Codable {
     /// Kinds are strings, as in `"string"`, and the rest are tagged: `{"optional": "string"}`,
-    /// `{"array": "integer"}`, `{"dictionary": "bool"}`, `{"object": {"name": "string"}}`.
+    /// `{"array": "integer"}`, `{"set": "string"}`, `{"dictionary": "bool"}`, `{"object": {"name": "string"}}`.
     public func encode(to encoder: any Encoder) throws {
         switch self {
         case .bool, .integer, .double, .string:
             var container = encoder.singleValueContainer()
             try container.encode(description)
-        case .optional(let schema), .array(let schema), .dictionary(let schema):
+        case .optional(let schema), .array(let schema), .set(let schema), .dictionary(let schema):
             var container = encoder.container(keyedBy: Tag.self)
             try container.encode(schema, forKey: tag)
         case .object(let object):
@@ -141,24 +145,26 @@ extension CodableSchema: Codable {
         }
         let container = try decoder.container(keyedBy: Tag.self)
         guard container.allKeys.count == 1, let tag = container.allKeys.first else {
-            throw DecodingError.dataCorrupted(.init(codingPath: decoder.codingPath, debugDescription: "Expected one of optional, array, dictionary or object"))
+            throw DecodingError.dataCorrupted(.init(codingPath: decoder.codingPath, debugDescription: "Expected one of optional, array, set, dictionary or object"))
         }
         switch tag {
         case .optional: self = .optional(try container.decode(CodableSchema.self, forKey: tag))
         case .array: self = .array(try container.decode(CodableSchema.self, forKey: tag))
+        case .set: self = .set(try container.decode(CodableSchema.self, forKey: tag))
         case .dictionary: self = .dictionary(try container.decode(CodableSchema.self, forKey: tag))
         case .object: self = .object(try container.decode([String: CodableSchema].self, forKey: tag))
         }
     }
 
     private enum Tag: String, CodingKey {
-        case optional, array, dictionary, object
+        case optional, array, set, dictionary, object
     }
 
     private var tag: Tag {
         switch self {
         case .optional: .optional
         case .array: .array
+        case .set: .set
         case .dictionary: .dictionary
         default: .object
         }

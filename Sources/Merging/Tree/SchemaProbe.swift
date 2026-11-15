@@ -12,6 +12,7 @@ final class SchemaProbe: Decoder {
     private var element: SchemaProbe?
     fileprivate var isOptional = false
     fileprivate var isDictionary = false
+    private var isSet = false
 
     init(codingPath: [any CodingKey] = [], types: [ObjectIdentifier] = []) {
         self.codingPath = codingPath
@@ -22,7 +23,7 @@ final class SchemaProbe: Decoder {
         let shape: CodableSchema = if let keyed {
             if isDictionary, let value = keyed[Self.dictionaryKey] { .dictionary(value.schema) } else { .object(keyed.mapValues(\.schema)) }
         } else if let element {
-            .array(element.schema)
+            isSet ? .set(element.schema) : .array(element.schema)
         } else {
             kind ?? .object([:])
         }
@@ -39,7 +40,9 @@ final class SchemaProbe: Decoder {
         types.append(id)
         defer { types.removeLast() }
         do {
-            return try T(from: self)
+            let value = try T(from: self)
+            if (type as? any MergeKinded.Type)?.mergeKind == .set { isSet = true }
+            return value
         } catch DecodingError.dataCorrupted(let context) where type is any RawRepresentable.Type {
             let reason = "\(type) rejected a placeholder raw value. Make it CaseIterable to read its schema."
             throw DecodingError.dataCorrupted(.init(codingPath: context.codingPath, debugDescription: reason, underlyingError: nil))

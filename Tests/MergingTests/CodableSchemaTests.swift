@@ -57,7 +57,7 @@ import Testing
             "born": .double,
             "id": .string,
             "status": .string,
-            "flags": .array(.integer),
+            "flags": .set(.integer),
             "notes": .array(.optional(.string)),
         ]))
         #expect(try CodableSchema(Person.self) == schema)
@@ -66,6 +66,7 @@ import Testing
     @Test func describesLikeSwift() throws {
         #expect(try CodableSchema(Pet.self).description == "{name: string, nickname: string?, tags: [string]}")
         #expect(try CodableSchema([String: Int?].self).description == "[string: integer?]")
+        #expect(try CodableSchema(Set<String>.self).description == "set<string>")
     }
 
     @Test func looksUpByPath() throws {
@@ -73,6 +74,7 @@ import Testing
         #expect(schema["child.grandchildren[0]"] == .string)
         #expect(schema["scores.math"] == .double)
         #expect(schema["notes[3]"] == .optional(.string))
+        #expect(schema["flags[0]"] == .integer)
         #expect(schema["."] == schema)
         #expect(schema["missing"] == nil)
         #expect(schema["name.first"] == nil)
@@ -85,6 +87,8 @@ import Testing
         let json = String(decoding: try encoder.encode(schema), as: UTF8.self)
         #expect(json == #"{"object":{"name":"string","nickname":{"optional":"string"},"tags":{"array":"string"}}}"#)
         #expect(try JSONDecoder().decode(CodableSchema.self, from: Data(json.utf8)) == schema)
+        let person = try CodableSchema(Person.self)
+        #expect(try JSONDecoder().decode(CodableSchema.self, from: encoder.encode(person)) == person)
     }
 
     @Test func diffsTwoVersionsOfAModel() throws {

@@ -112,8 +112,8 @@ Changes name their case, with paths as arrays and values as plain JSON:
 
 ## Schemas
 
-`CodableSchema` reads the shape of a `Decodable` type from the type alone: each property's kind, and which
-are optional. It's `Codable`, so two versions of a model can be compared with `CodableDifference`, and
+`CodableSchema` reads the shape of a `Decodable` type from the type alone: each property's kind, which
+are optional, and which collections are sets. It's `Codable`, so two versions of a model can be compared with `CodableDifference`, and
 `schema[change.path]` says whether a change is at an optional, an array or a dictionary.
 
 ```swift
