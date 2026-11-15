@@ -20,7 +20,7 @@ import Testing
     let edited = Person(name: "Ana", age: 31, nickname: nil, tags: ["a", "b", "c"], child: Child(grandchildren: ["Eva", "Bo"]))
 
     @Test func listsChangesInPathOrder() throws {
-        let difference = try edited.codableDifference(from: original)
+        let difference = try CodableDifference(from: original, to: edited)
         #expect(Array(difference) == [
             .replace(path: "age", old: 30, new: 31),
             .replace(path: "child.grandchildren[0]", old: "Ava", new: "Eva"),
@@ -36,11 +36,11 @@ import Testing
         #expect(difference.insertions.map(\.path) == ["tags[2]"])
         #expect(difference.removals.map(\.path) == ["nickname"])
         #expect(difference.replacements.count == 2)
-        #expect(try original.codableDifference(from: original).isEmpty)
+        #expect(try CodableDifference(from: original, to: original).isEmpty)
     }
 
     @Test func appliesAndInverts() throws {
-        let difference = try edited.codableDifference(from: original)
+        let difference = try CodableDifference(from: original, to: edited)
         #expect(try original.applying(difference) == edited)
         #expect(try edited.applying(difference.inverse()) == original)
         #expect(difference.inverse().inverse() == difference)
@@ -49,21 +49,21 @@ import Testing
     @Test func appliesArraysThatGrowAndShrink() throws {
         let short = [1, 2]
         let long = [1, 5, 3, 4]
-        let growing = try long.codableDifference(from: short)
+        let growing = try CodableDifference(from: short, to: long)
         #expect(growing.map(\.description) == ["~ [1]: 2 → 5", "+ [2]: 3", "+ [3]: 4"])
         #expect(try short.applying(growing) == long)
         #expect(try long.applying(growing.inverse()) == short)
-        #expect(try long.applying(short.codableDifference(from: long)) == short)
+        #expect(try long.applying(CodableDifference(from: long, to: short)) == short)
     }
 
     @Test func replacesAWholeValueAtTheRoot() throws {
-        let difference = try "y".codableDifference(from: "x")
+        let difference = try CodableDifference(from: "x", to: "y")
         #expect(Array(difference) == [.replace(path: ".", old: "x", new: "y")])
         #expect(try "x".applying(difference) == "y")
     }
 
     @Test func applyingThrowsWhenTheResultDoesNotDecode() throws {
-        let toText = try "y".codableDifference(from: "x")
+        let toText = try CodableDifference(from: "x", to: "y")
         #expect(throws: DecodingError.self) { try 2.applying(toText) }
     }
 
@@ -78,7 +78,7 @@ import Testing
     }
 
     @Test func travelsAsJSON() throws {
-        let difference = try edited.codableDifference(from: original)
+        let difference = try CodableDifference(from: original, to: edited)
         let encoder = JSONEncoder()
         encoder.outputFormatting = .sortedKeys
         let data = try encoder.encode(difference)
@@ -86,7 +86,7 @@ import Testing
         #expect(received == difference)
         #expect(try original.applying(received) == edited)
 
-        let small = try [1, 3, 4].codableDifference(from: [1, 2])
+        let small = try CodableDifference(from: [1, 2], to: [1, 3, 4])
         let json = try JSONDecoder().decode(CodableValue.self, from: encoder.encode(small))
         guard case .object(let object) = json else { Issue.record("Expected an object, got \(json)"); return }
         let arrayID = try CodableSchema([Int].self).id
@@ -111,17 +111,17 @@ import Testing
     }
 
     @Test func recordsTheSchemaItWasMadeFrom() throws {
-        let difference = try edited.codableDifference(from: original)
+        let difference = try CodableDifference(from: original, to: edited)
         let personID = try CodableSchema(Person.self).id
         #expect(difference.schemaID == personID)
         #expect(difference.inverse().schemaID == difference.schemaID)
-        #expect(try CodableSchema.integer.codableDifference(from: .string).schemaID == nil)
+        #expect(try CodableDifference(from: CodableSchema.string, to: .integer).schemaID == nil)
     }
 
     @Test func refusesADifferenceForAnotherSchema() throws {
         struct Pet: Codable, Equatable { var name: String }
         struct Tag: Codable, Equatable { var name: String; var color: String? }
-        let renaming = try Pet(name: "Max").codableDifference(from: Pet(name: "Rex"))
+        let renaming = try CodableDifference(from: Pet(name: "Rex"), to: Pet(name: "Max"))
         #expect(throws: DecodingError.self) { try Tag(name: "Rex").applying(renaming) }
 
         let anonymous = try JSONDecoder().decode(CodableDifference.self, from: Data(#"{"changes":[{"replace":{"path":["name"],"old":"Rex","new":"Max"}}]}"#.utf8))

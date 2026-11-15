@@ -8,7 +8,7 @@ import Synchronization
 /// let schema = try CodableSchema(Person.self)
 /// print(schema)                               // {age: integer, child: {grandchildren: [string]}?, name: string}
 /// schema["child.grandchildren[0]"]            // .string
-/// let changes = try schema.codableDifference(from: oldSchema)
+/// let changes = try CodableDifference(from: oldSchema, to: schema)
 /// ```
 ///
 /// Schemas are cached by type. A raw-value enum must be `CaseIterable`, and a type that contains

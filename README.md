@@ -94,7 +94,7 @@ Without a two-way merge, an `Equatable` value merges only when both sides are eq
 JSON would hold it.
 
 ```swift
-let difference = try edited.codableDifference(from: original)
+let difference = try CodableDifference(from: original, to: edited)
 for change in difference { print(change) }   // ~ child.grandchildren[0]: "Ava" → "Eva"
 
 if case .replace(path: "age", old: _, new: .int(let age))? = difference.first { print(age) }
