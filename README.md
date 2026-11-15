@@ -87,10 +87,43 @@ struct LongerMerge: MergeStrategy {
 
 Without a two-way merge, an `Equatable` value merges only when both sides are equal.
 
+## Differences
+
+`CodableDifference` lists what changed between two versions of any `Codable` value, shaped like
+`CollectionDifference`. Each change has a `Path` that reads as a string and a `CodableValue`, the value as
+JSON would hold it.
+
+```swift
+let difference = try CodableDifference(from: original, to: edited)
+for change in difference { print(change) }   // ~ child.grandchildren[0]: "Ava" → "Eva"
+
+if case .replace(path: "age", old: _, new: .int(let age))? = difference.first { print(age) }
+let rebuilt = try original.applying(difference)            // == edited
+let undone = try edited.applying(difference.inverse())     // == original
+```
+
+Objects compare key by key and arrays index by index, so an element inserted mid-array shows as
+replacements of the ones after it.
+
+## Schemas
+
+`CodableSchema` reads the shape of a `Decodable` type from the type alone: each property's kind, and which
+are optional. It's `Codable`, so two versions of a model can be compared with `CodableDifference`, and
+`schema[change.path]` says whether a change is at an optional, an array or a dictionary.
+
+```swift
+let schema = try CodableSchema(Person.self)
+print(schema)                       // {age: integer, child: {grandchildren: [string]}?, name: string}
+schema["child.grandchildren[0]"]    // .string
+```
+
+A raw-value enum must be `CaseIterable`. A type that contains itself, an enum with associated values, or
+an `init(from:)` that rejects placeholder values throws.
+
 ## Requirements
 
-Swift 6.1 (Xcode 16.3) or later. iOS 17, macOS 14, tvOS 17, watchOS 10 and
-visionOS 1, or Linux. The macro builds with swift-syntax.
+Swift 6.1 (Xcode 16.3) or later. iOS 18, macOS 15, tvOS 18, watchOS 11 and
+visionOS 2, or Linux. The macro builds with swift-syntax.
 
 ```swift
 .package(url: "https://github.com/JonathanStorey/swift-merging.git", branch: "main")
