@@ -93,15 +93,12 @@ import Testing
             var name: String
             var nickname: String?
         }
-        let difference = try CodableDifference(from: CodableSchema(Before.self), to: CodableSchema(After.self))
+        let difference = try CodableSchema(After.self).codableDifference(from: CodableSchema(Before.self))
         #expect(difference.map(\.description) == [#"+ object.nickname: {"optional": "string"}"#])
     }
 
     @Test func explainsAnInsertionAtAnOptional() throws {
-        let difference = try CodableDifference(
-            from: Pet(name: "Rex", nickname: nil, tags: []),
-            to: Pet(name: "Rex", nickname: "R", tags: [])
-        )
+        let difference = try Pet(name: "Rex", nickname: "R", tags: []).codableDifference(from: Pet(name: "Rex", nickname: nil, tags: []))
         let schema = try CodableSchema(Pet.self)
         #expect(difference.map(\.path).map { schema[$0] } == [.optional(.string)])
     }

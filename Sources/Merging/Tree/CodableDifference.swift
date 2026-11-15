@@ -4,7 +4,7 @@ import Foundation
 /// of changes, each at the deepest path where the versions differ, in path order.
 ///
 /// ```swift
-/// let difference = try CodableDifference(from: original, to: edited)
+/// let difference = try edited.codableDifference(from: original)
 /// for change in difference { print(change) }      // ~ child.grandchildren[2]: "Ava" → "Eva"
 /// let rebuilt = try original.applying(difference) // == edited
 /// ```
@@ -45,11 +45,6 @@ public struct CodableDifference: RandomAccessCollection, Hashable, Sendable {
         self.schemaID = schemaID
     }
 
-    /// The changes from `old` to `new`.
-    public init<Value: Codable>(from old: Value, to new: Value) throws {
-        let changes = try CodableValue(encoding: new).difference(from: CodableValue(encoding: old)).changes
-        self.init(changes, schemaID: try? CodableSchema(Value.self).id)
-    }
 
     public var startIndex: Int { changes.startIndex }
     public var endIndex: Int { changes.endIndex }
@@ -74,12 +69,23 @@ public struct CodableDifference: RandomAccessCollection, Hashable, Sendable {
 }
 
 extension Encodable where Self: Decodable {
+    /// What changed from `original` to this value, in the word order of `difference(from:)` on a
+    /// collection, with the schema id of `Self`.
+    ///
+    /// ```swift
+    /// let difference = try edited.codableDifference(from: original)
+    /// ```
+    public func codableDifference(from original: Self) throws -> CodableDifference {
+        let changes = try CodableValue(encoding: self).difference(from: CodableValue(encoding: original)).changes
+        return CodableDifference(changes, schemaID: try? CodableSchema(Self.self).id)
+    }
+
     /// This value with `difference` applied. A change whose path isn't in this value is skipped, and the
     /// result must decode, or this throws the decoding error. A difference made for another schema
     /// throws before anything is applied.
     ///
     /// ```swift
-    /// let edited = try original.applying(CodableDifference(from: original, to: edited))
+    /// let rebuilt = try original.applying(edited.codableDifference(from: original))   // == edited
     /// ```
     public func applying(_ difference: CodableDifference) throws -> Self {
         if let expected = difference.schemaID, let actual = try? CodableSchema(Self.self).id, expected != actual {

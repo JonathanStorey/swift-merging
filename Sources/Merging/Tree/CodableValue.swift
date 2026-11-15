@@ -2,7 +2,7 @@
 /// formatting. It's the element of a `CodableDifference`.
 ///
 /// ```swift
-/// let difference = try CodableDifference(from: original, to: edited)
+/// let difference = try edited.codableDifference(from: original)
 /// if case .replace(_, .int(let old), .int(let new))? = difference.first { print(old, new) }
 /// ```
 ///
