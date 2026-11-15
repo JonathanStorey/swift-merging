@@ -87,6 +87,24 @@ struct LongerMerge: MergeStrategy {
 
 Without a two-way merge, an `Equatable` value merges only when both sides are equal.
 
+## Differences
+
+`CodableDifference` lists what changed between two versions of any `Codable` value, shaped like
+`CollectionDifference`. Each change has a `Path` that reads as a string and a `CodableValue`, the value as
+JSON would hold it.
+
+```swift
+let difference = try CodableDifference(from: original, to: edited)
+for change in difference { print(change) }   // ~ child.grandchildren[0]: "Ava" → "Eva"
+
+if case .replace(path: "age", old: _, new: .int(let age))? = difference.first { print(age) }
+let rebuilt = try original.applying(difference)            // == edited
+let undone = try edited.applying(difference.inverse())     // == original
+```
+
+Objects compare key by key and arrays index by index, so an element inserted mid-array shows as
+replacements of the ones after it.
+
 ## Requirements
 
 Swift 6.1 (Xcode 16.3) or later. iOS 17, macOS 14, tvOS 17, watchOS 10 and

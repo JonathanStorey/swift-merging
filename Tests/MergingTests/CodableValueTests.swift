@@ -142,25 +142,25 @@ private func byNode<T: Codable & Sendable>(_ ours: T, _ theirs: T, from base: T)
 
 @Suite struct TreeArrayMergeTests {
     @Test func bothReplacingAnElementDifferentlyIsAConflict() {
-        let base = CodableTree.array([.string("a"), .string("b")])
-        let ours = CodableTree.array([.string("a"), .string("x")])
-        let theirs = CodableTree.array([.string("a"), .string("y")])
+        let base = CodableValue.array([.string("a"), .string("b")])
+        let ours = CodableValue.array([.string("a"), .string("x")])
+        let theirs = CodableValue.array([.string("a"), .string("y")])
         #expect(merged(ours, theirs, from: base) == nil)
     }
 
     @Test func oneSideChangingAndTheOtherRemovingKeepsTheChange() throws {
-        let base = CodableTree.array([.string("a"), .string("b"), .string("c")])
-        let ours = CodableTree.array([.string("a"), .string("B"), .string("c")])
-        let theirs = CodableTree.array([.string("a"), .string("c")])
+        let base = CodableValue.array([.string("a"), .string("b"), .string("c")])
+        let ours = CodableValue.array([.string("a"), .string("B"), .string("c")])
+        let theirs = CodableValue.array([.string("a"), .string("c")])
         #expect(merged(ours, theirs, from: base) == .array([.string("a"), .string("B"), .string("c")]))
     }
 
-    private func merged(_ ours: CodableTree, _ theirs: CodableTree, from base: CodableTree) -> CodableTree? {
-        (try? MergeTree(ours).merging(with: MergeTree(theirs), from: MergeTree(base))).map { CodableTree($0) }
+    private func merged(_ ours: CodableValue, _ theirs: CodableValue, from base: CodableValue) -> CodableValue? {
+        (try? MergeTree(ours).merging(with: MergeTree(theirs), from: MergeTree(base))).map { CodableValue($0) }
     }
 }
 
-@Suite struct CodableTreeTests {
+@Suite struct CodableValueTests {
     struct Point: Codable, Equatable {
         var x: Int
         var y: Double
@@ -168,7 +168,7 @@ private func byNode<T: Codable & Sendable>(_ ours: T, _ theirs: T, from base: T)
     }
 
     @Test func aTreeShowsWhatItHolds() throws {
-        let tree = try CodableTree(encoding: Point(x: 1, y: 2.5, name: "A"))
+        let tree = try CodableValue(encoding: Point(x: 1, y: 2.5, name: "A"))
         #expect(tree["x"]?.int == 1)
         #expect(tree["y"]?.double == 2.5)
         #expect(tree["name"]?.string == "A")
@@ -177,7 +177,7 @@ private func byNode<T: Codable & Sendable>(_ ours: T, _ theirs: T, from base: T)
     }
 
     @Test func literalsBuildTrees() {
-        let tree: CodableTree = ["tags": ["a", 1, 2.5, true, nil]]
+        let tree: CodableValue = ["tags": ["a", 1, 2.5, true, nil]]
         #expect(tree["tags"]?[1] == .int(1))
         #expect(tree["tags"]?[4]?.isNull == true)
         #expect(tree["missing"] == nil)

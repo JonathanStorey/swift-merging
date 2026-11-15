@@ -1,16 +1,14 @@
 /// A value's stored form, as JSON would hold it: what its `Codable` conformance encodes, without the
-/// formatting. Internal for now. With `Path` and `difference(from:)`, it's the start of a public
-/// `CodableDifference` that lists what changed between two versions of a value.
+/// formatting. It's the element of a `CodableDifference`.
 ///
 /// ```swift
-/// let tree = try CodableTree(encoding: Point(x: 1, y: 2))   // {"x": 1, "y": 2}
-/// tree["x"]?.int                                            // 1
-/// let point = try tree.decode(as: Point.self)
+/// let difference = try CodableDifference(from: original, to: edited)
+/// if case .replace(_, .int(let old), .int(let new))? = difference.first { print(old, new) }
 /// ```
 ///
 /// Dates are stored as seconds since 2001, enums with raw values as their raw value, and an optional
 /// that's `nil` is left out of its object.
-enum CodableTree: Hashable, Sendable {
+public enum CodableValue: Hashable, Sendable {
     case null
     case bool(Bool)
     /// A whole number, from any integer type.
@@ -21,12 +19,12 @@ enum CodableTree: Hashable, Sendable {
     case double(Double)
     case string(String)
     /// The elements of an array or other unkeyed collection, such as a set, in their encoded order.
-    case array([CodableTree])
+    case array([CodableValue])
     /// The properties of a struct or class, or the entries of a dictionary, by key.
-    case object([String: CodableTree])
+    case object([String: CodableValue])
 }
 
-extension CodableTree {
+extension CodableValue {
     /// The tree of a value.
     init(encoding value: some Encodable) throws {
         self.init(try TreeEncoder().encode(value))
@@ -68,12 +66,12 @@ extension CodableTree {
         return value
     }
 
-    var array: [CodableTree]? {
+    var array: [CodableValue]? {
         guard case .array(let value) = self else { return nil }
         return value
     }
 
-    var object: [String: CodableTree]? {
+    var object: [String: CodableValue]? {
         guard case .object(let value) = self else { return nil }
         return value
     }
@@ -84,7 +82,7 @@ extension CodableTree {
     /// ```swift
     /// tree["address"]?["city"] = "Bergen"
     /// ```
-    subscript(key: String) -> CodableTree? {
+    subscript(key: String) -> CodableValue? {
         get { object?[key] }
         set {
             guard case .object(var object) = self else { return }
@@ -95,7 +93,7 @@ extension CodableTree {
 
     /// The element at `index`, if this is an array that long. Setting it replaces the element, and setting
     /// `nil` removes it. Setting it outside the array does nothing.
-    subscript(index: Int) -> CodableTree? {
+    subscript(index: Int) -> CodableValue? {
         get {
             guard let array, array.indices.contains(index) else { return nil }
             return array[index]
@@ -109,7 +107,7 @@ extension CodableTree {
 
     /// The nodes directly inside this one: an array's elements, or an object's values in key order. A
     /// single value has none.
-    var children: [CodableTree] {
+    var children: [CodableValue] {
         switch self {
         case .array(let array): array
         case .object(let object): object.keys.sorted().map { object[$0]! }
@@ -118,9 +116,9 @@ extension CodableTree {
     }
 }
 
-extension CodableTree: CustomStringConvertible {
+extension CodableValue: CustomStringConvertible {
     /// The tree as JSON, with keys sorted.
-    var description: String {
+    public var description: String {
         switch self {
         case .null: "null"
         case .bool(let value): "\(value)"
@@ -135,22 +133,22 @@ extension CodableTree: CustomStringConvertible {
     }
 }
 
-extension CodableTree: ExpressibleByNilLiteral, ExpressibleByBooleanLiteral, ExpressibleByIntegerLiteral, ExpressibleByFloatLiteral,
+extension CodableValue: ExpressibleByNilLiteral, ExpressibleByBooleanLiteral, ExpressibleByIntegerLiteral, ExpressibleByFloatLiteral,
     ExpressibleByStringLiteral, ExpressibleByArrayLiteral, ExpressibleByDictionaryLiteral
 {
-    init(nilLiteral: ()) { self = .null }
-    init(booleanLiteral value: Bool) { self = .bool(value) }
-    init(integerLiteral value: Int64) { self = .int(value) }
-    init(floatLiteral value: Double) { self = .double(value) }
-    init(stringLiteral value: String) { self = .string(value) }
-    init(arrayLiteral elements: CodableTree...) { self = .array(elements) }
+    public init(nilLiteral: ()) { self = .null }
+    public init(booleanLiteral value: Bool) { self = .bool(value) }
+    public init(integerLiteral value: Int64) { self = .int(value) }
+    public init(floatLiteral value: Double) { self = .double(value) }
+    public init(stringLiteral value: String) { self = .string(value) }
+    public init(arrayLiteral elements: CodableValue...) { self = .array(elements) }
 
-    init(dictionaryLiteral elements: (String, CodableTree)...) {
+    public init(dictionaryLiteral elements: (String, CodableValue)...) {
         self = .object(Dictionary(elements, uniquingKeysWith: { _, last in last }))
     }
 }
 
-extension CodableTree {
+extension CodableValue {
     /// The merge tree's data, without its merge kinds.
     init(_ tree: MergeTree) {
         self = switch tree {
@@ -160,16 +158,16 @@ extension CodableTree {
         case .uint(let value): .uint(value)
         case .double(let value): .double(value)
         case .string(let value): .string(value)
-        case .array(let values): .array(values.map(CodableTree.init))
-        case .object(let object): .object(object.mapValues(CodableTree.init))
-        case .merged(let data, _): CodableTree(data)
+        case .array(let values): .array(values.map(CodableValue.init))
+        case .object(let object): .object(object.mapValues(CodableValue.init))
+        case .merged(let data, _): CodableValue(data)
         }
     }
 }
 
 extension MergeTree {
     /// A merge tree of this tree's data, with no merge kinds.
-    init(_ tree: CodableTree) {
+    init(_ tree: CodableValue) {
         self = switch tree {
         case .null: .null
         case .bool(let value): .bool(value)
