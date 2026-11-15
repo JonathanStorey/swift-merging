@@ -76,9 +76,11 @@ struct Game {
     }
 
     @Test func trueWinsSetsTheFlag() {
-        let ours = Game(flagged: true)
-        #expect(ours.$flagged.merging(with: false, from: true) == true)
+        #expect(Game(flagged: true).$flagged.merging(with: false, from: false) == true)
         #expect(base.$flagged.merging(with: true) == true)
+        // A side only one changed keeps that side, so clearing the flag sticks when the other left it.
+        #expect(base.$flagged.merging(with: true, from: true) == false)
+        #expect(BoolTrueWinsMerge().merge(base: true, ours: false, theirs: true) == true)
     }
 
     @Test func wordEditsCombine() {
