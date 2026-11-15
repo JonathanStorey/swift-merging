@@ -5,8 +5,8 @@ import PackageDescription
 
 let package = Package(
     name: "swift-merging",
-    // Swift 6.1 (Xcode 16.3) or later, for typed throws and Swift Testing.
-    platforms: [.iOS(.v17), .macOS(.v14), .tvOS(.v17), .watchOS(.v10), .visionOS(.v1)],
+    // Swift 6.1 (Xcode 16.3) or later, for typed throws and Swift Testing. iOS 18 and its peers, for Mutex.
+    platforms: [.iOS(.v18), .macOS(.v15), .tvOS(.v18), .watchOS(.v11), .visionOS(.v2)],
     products: [
         .library(name: "Merging", targets: ["Merging"]),
     ],

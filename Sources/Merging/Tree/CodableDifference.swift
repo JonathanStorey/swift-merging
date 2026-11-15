@@ -9,6 +9,10 @@
 ///
 /// Objects compare key by key and arrays index by index, so an element inserted mid-array shows as
 /// replacements of the ones after it and an insertion at the end.
+///
+/// A `nil` optional property isn't encoded, so setting one is an insertion and clearing it a removal. An
+/// optional inside an array keeps its place as `null`, so there it's a replacement from or to `.null`.
+/// `CodableSchema` tells these apart: `schema[change.path]` is `.optional` for an optional.
 public struct CodableDifference: RandomAccessCollection, Hashable, Sendable {
     public typealias ChangeElement = CodableValue
 
