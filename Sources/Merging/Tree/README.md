@@ -113,6 +113,12 @@ public indirect enum CodableSchema {
 | Text | `var description: String`, as `{age: integer, id: uuid, name: string?}` |
 | Codable | `"string"`, `{"optional": "string"}`, `{"object": {…}}` |
 
+## Limits
+
+Encoding, decoding, diffing and comparing all recurse once per level of nesting, so a value nested a
+thousand levels deep can overflow a secondary thread's stack. `JSONDecoder` stops at 512 levels for the same
+reason. Real models stay far below either limit.
+
 ## Extensions on types we don't own
 
 There is one public extension:

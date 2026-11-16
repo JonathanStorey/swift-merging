@@ -74,7 +74,7 @@ import Testing
         #expect(try CodableRepresentation(encoding: Float(-2.5e-3)) == .double(-2.5e-3))
         var values: [Float] = [
             0, -0.0, 1, -1, .pi, .infinity, -.infinity, .greatestFiniteMagnitude, -.greatestFiniteMagnitude,
-            .leastNormalMagnitude, .leastNonzeroMagnitude, .ulpOfOne, 16_777_217, 0.3,
+            .leastNormalMagnitude, .leastNonzeroMagnitude, .ulpOfOne, 16_777_216, 0.3,
         ]
         for bits in stride(from: UInt32(0), to: .max, by: 40_009) {
             values.append(Float(bitPattern: bits))

@@ -189,8 +189,9 @@ extension CodableRepresentation {
 
     /// Applies `difference` like `RangeReplaceableCollection.applying(_:)`: replacements first, then
     /// removals from the last, so each index still points where it did, then insertions from the first.
+    /// A replacement or removal of something that isn't there is skipped.
     mutating func apply(_ difference: CodableDifference) {
-        for case .replace(let path, _, let new) in difference {
+        for case .replace(let path, _, let new) in difference where self[path] != nil {
             self[path] = new
         }
         for change in difference.removals.reversed() {
