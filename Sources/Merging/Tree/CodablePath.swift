@@ -215,9 +215,11 @@ extension CodablePath.Component: Codable {
 }
 
 extension Set<CodableRepresentation> {
-    /// The members in a fixed order, by their text, since a set has none of its own.
+    /// The members in a fixed order, by their text and then their case, since a set has none of its own.
     var ordered: [CodableRepresentation] {
-        sorted { $0.description < $1.description }
+        map { ($0.description, $0) }
+            .sorted { $0.0 < $1.0 || $0.0 == $1.0 && $0.1.caseIndex < $1.1.caseIndex }
+            .map(\.1)
     }
 
     /// The member equal to `member`, or failing that, one with the same JSON form, so a `.string` read

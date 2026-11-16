@@ -34,6 +34,13 @@ private final class Node: Encoder {
     /// writes it, rather than `0.10000000149011612`. Narrowing gives `value` back.
     func store(_ value: Float) { self.value = .double(Double("\(value)") ?? Double(value)) }
     func store<T: FixedWidthInteger & Encodable>(_ value: T) { self.value = MergeTree(value) }
+    /// Stores a `UInt128`, which fits only up to `Int128.max`.
+    func store(_ value: UInt128) throws {
+        guard let integer = Int128(exactly: value) else {
+            throw EncodingError.invalidValue(value, EncodingError.Context(codingPath: codingPath, debugDescription: "\(value) is larger than Int128.max."))
+        }
+        self.value = .integer(integer)
+    }
     /// Stores a value, with the kind it merges by if it has one, such as a set's. A `Date`, `Data`, `UUID`,
     /// `Decimal` or `URL` is stored as itself, before its own encoding reduces it to a number or a string.
     func store<T: Encodable>(_ value: T) throws {
@@ -97,6 +104,8 @@ private struct KeyedContainer<Key: CodingKey>: KeyedEncodingContainerProtocol {
     mutating func encode(_ value: UInt16, forKey key: Key) { node.child(forKey: key).store(value) }
     mutating func encode(_ value: UInt32, forKey key: Key) { node.child(forKey: key).store(value) }
     mutating func encode(_ value: UInt64, forKey key: Key) { node.child(forKey: key).store(value) }
+    mutating func encode(_ value: Int128, forKey key: Key) { node.child(forKey: key).store(value) }
+    mutating func encode(_ value: UInt128, forKey key: Key) throws { try node.child(forKey: key).store(value) }
     mutating func encode<T: Encodable>(_ value: T, forKey key: Key) throws { try node.child(forKey: key).store(value) }
 
     mutating func nestedContainer<NestedKey: CodingKey>(
@@ -133,6 +142,8 @@ private struct UnkeyedContainer: UnkeyedEncodingContainer {
     mutating func encode(_ value: UInt16) { node.appendChild().store(value) }
     mutating func encode(_ value: UInt32) { node.appendChild().store(value) }
     mutating func encode(_ value: UInt64) { node.appendChild().store(value) }
+    mutating func encode(_ value: Int128) { node.appendChild().store(value) }
+    mutating func encode(_ value: UInt128) throws { try node.appendChild().store(value) }
     mutating func encode<T: Encodable>(_ value: T) throws { try node.appendChild().store(value) }
 
     mutating func nestedContainer<NestedKey: CodingKey>(keyedBy keyType: NestedKey.Type) -> KeyedEncodingContainer<NestedKey> {
@@ -162,5 +173,7 @@ private struct SingleValueContainer: SingleValueEncodingContainer {
     mutating func encode(_ value: UInt16) { node.store(value) }
     mutating func encode(_ value: UInt32) { node.store(value) }
     mutating func encode(_ value: UInt64) { node.store(value) }
+    mutating func encode(_ value: Int128) { node.store(value) }
+    mutating func encode(_ value: UInt128) throws { try node.store(value) }
     mutating func encode<T: Encodable>(_ value: T) throws { try node.store(value) }
 }

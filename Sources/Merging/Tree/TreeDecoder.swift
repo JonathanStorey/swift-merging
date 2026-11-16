@@ -138,6 +138,8 @@ extension Reader: SingleValueDecodingContainer {
     func decode(_ type: UInt16.Type) throws -> UInt16 { try read(type) }
     func decode(_ type: UInt32.Type) throws -> UInt32 { try read(type) }
     func decode(_ type: UInt64.Type) throws -> UInt64 { try read(type) }
+    func decode(_ type: Int128.Type) throws -> Int128 { try read(type) }
+    func decode(_ type: UInt128.Type) throws -> UInt128 { try read(type) }
     func decode<T: Decodable>(_ type: T.Type) throws -> T { try read(type) }
 }
 
@@ -171,6 +173,8 @@ private struct KeyedContainer<Key: CodingKey>: KeyedDecodingContainerProtocol {
     func decode(_ type: UInt16.Type, forKey key: Key) throws -> UInt16 { try reader(forKey: key).read(type) }
     func decode(_ type: UInt32.Type, forKey key: Key) throws -> UInt32 { try reader(forKey: key).read(type) }
     func decode(_ type: UInt64.Type, forKey key: Key) throws -> UInt64 { try reader(forKey: key).read(type) }
+    func decode(_ type: Int128.Type, forKey key: Key) throws -> Int128 { try reader(forKey: key).read(type) }
+    func decode(_ type: UInt128.Type, forKey key: Key) throws -> UInt128 { try reader(forKey: key).read(type) }
     func decode<T: Decodable>(_ type: T.Type, forKey key: Key) throws -> T { try reader(forKey: key).read(type) }
 
     func nestedContainer<NestedKey: CodingKey>(keyedBy type: NestedKey.Type, forKey key: Key) throws -> KeyedDecodingContainer<NestedKey> {
@@ -228,6 +232,8 @@ private struct UnkeyedContainer: UnkeyedDecodingContainer {
     mutating func decode(_ type: UInt16.Type) throws -> UInt16 { try next(type).read(type) }
     mutating func decode(_ type: UInt32.Type) throws -> UInt32 { try next(type).read(type) }
     mutating func decode(_ type: UInt64.Type) throws -> UInt64 { try next(type).read(type) }
+    mutating func decode(_ type: Int128.Type) throws -> Int128 { try next(type).read(type) }
+    mutating func decode(_ type: UInt128.Type) throws -> UInt128 { try next(type).read(type) }
     mutating func decode<T: Decodable>(_ type: T.Type) throws -> T { try next(type).read(type) }
 
     mutating func nestedContainer<NestedKey: CodingKey>(keyedBy type: NestedKey.Type) throws -> KeyedDecodingContainer<NestedKey> {
