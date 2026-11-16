@@ -30,10 +30,17 @@ private final class Node: Encoder {
     func store(_ value: Bool) { self.value = .bool(value) }
     func store(_ value: String) { self.value = .string(value) }
     func store(_ value: Double) { self.value = .double(value) }
-    func store(_ value: Float) { self.value = .double(Double(value)) }
+    /// Widens through the shortest text that reads back as `value`, so `0.1` stays `0.1` as `JSONEncoder`
+    /// writes it, rather than `0.10000000149011612`. Narrowing gives `value` back.
+    func store(_ value: Float) { self.value = .double(Double("\(value)") ?? Double(value)) }
     func store<T: FixedWidthInteger & Encodable>(_ value: T) { self.value = MergeTree(value) }
-    /// Stores a value, with the kind it merges by if it has one, such as a set's.
+    /// Stores a value, with the kind it merges by if it has one, such as a set's. A `Date`, `Data`, `UUID`,
+    /// `Decimal` or `URL` is stored as itself, before its own encoding reduces it to a number or a string.
     func store<T: Encodable>(_ value: T) throws {
+        if let leaf = MergeTree(leaf: value) {
+            self.value = leaf
+            return
+        }
         try value.encode(to: self)
         if let kinded = value as? any MergeKinded {
             kind = type(of: kinded).mergeKind

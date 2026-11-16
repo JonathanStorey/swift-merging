@@ -49,22 +49,25 @@ final class SchemaProbe: Decoder {
         }
     }
 
-    /// A real instance for types whose decoding checks its input or that the schema names: a date, every
-    /// case of a `CaseIterable` enum, and a `UUID` or `URL` with the shape its encoding has.
+    /// A real instance for types whose decoding checks its input or that the schema names: a `Date`,
+    /// `Data`, `UUID`, `Decimal` or `URL`, and every case of a `CaseIterable` enum.
     private func placeholder<T>(_ type: T.Type) throws -> T? {
-        if type is Date.Type {
-            kind = .date
-            return Date(timeIntervalSinceReferenceDate: 0) as? T
-        }
         if let iterable = type as? any CaseIterable.Type {
             let cases = allCases(of: iterable)
             guard let first = cases.first as? T else { return nil }
             kind = .enumeration(try cases.compactMap { $0 as? any Encodable }.map { try CodableRepresentation(encoding: $0) })
             return first
         }
-        let instance: Any? = if type is UUID.Type { UUID() } else if type is URL.Type { URL(fileURLWithPath: "/") } else { nil }
-        guard let value = instance as? T, let encodable = instance as? any Encodable else { return nil }
-        kind = CodableSchema(shapeOf: try CodableRepresentation(encoding: encodable))
+        let leaf: (CodableSchema, Any)? = switch type {
+        case is Date.Type: (.date, Date(timeIntervalSinceReferenceDate: 0))
+        case is Data.Type: (.data, Data())
+        case is UUID.Type: (.uuid, UUID())
+        case is Decimal.Type: (.decimal, Decimal())
+        case is URL.Type: (.url, URL(fileURLWithPath: "/"))
+        default: nil
+        }
+        guard case let (kind, instance)? = leaf, let value = instance as? T else { return nil }
+        self.kind = kind
         return value
     }
 

@@ -1,3 +1,5 @@
+import Foundation
+
 /// A value's `CodableRepresentation`, marking the parts that merge by a kind of their own rather than by their shape:
 /// sets and dictionaries. `TreeEncoder` makes one, and `TreeDecoder` reads it back.
 enum MergeTree: Equatable, Sendable {
@@ -7,6 +9,11 @@ enum MergeTree: Equatable, Sendable {
     case uint(UInt64)
     case double(Double)
     case string(String)
+    case date(Date)
+    case data(Data)
+    case uuid(UUID)
+    case decimal(Decimal)
+    case url(URL)
     case array([MergeTree])
     case object([String: MergeTree])
     /// A part that merges by a kind of its own rather than by its shape.
@@ -17,6 +24,20 @@ extension MergeTree {
     /// An integer, as `int` when it fits and `uint` otherwise.
     init(_ value: some BinaryInteger) {
         if let int = Int64(exactly: value) { self = .int(int) } else { self = .uint(UInt64(value)) }
+    }
+
+    /// The typed leaf for a `Date`, `Data`, `UUID`, `Decimal` or `URL`, or for a `CodableRepresentation`,
+    /// which is a tree already. `nil` for anything else.
+    init?(leaf value: Any) {
+        switch value {
+        case let value as Date: self = .date(value)
+        case let value as Data: self = .data(value)
+        case let value as UUID: self = .uuid(value)
+        case let value as Decimal: self = .decimal(value)
+        case let value as URL: self = .url(value)
+        case let value as CodableRepresentation: self = MergeTree(value)
+        default: return nil
+        }
     }
 }
 
@@ -30,6 +51,11 @@ extension MergeTree {
         case .uint(let value): "u\(value)"
         case .double(let value): "d\(value)"
         case .string(let value): value.debugDescription
+        case .date(let value): "t\(value.timeIntervalSinceReferenceDate)"
+        case .data(let value): "b" + value.base64EncodedString()
+        case .uuid(let value): "g" + value.uuidString
+        case .decimal(let value): "m\(value)"
+        case .url(let value): "l" + value.absoluteString.debugDescription
         case .array(let values): "[" + values.map(\.canonical).joined(separator: ",") + "]"
         case .object(let object):
             "{" + object.keys.sorted().map { $0.debugDescription + ":" + object[$0]!.canonical }.joined(separator: ",") + "}"

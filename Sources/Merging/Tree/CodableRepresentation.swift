@@ -1,15 +1,18 @@
 import Foundation
 
-/// A value's stored form, as JSON would hold it: what its `Codable` conformance encodes, without the
-/// formatting. It's the element of a `CodableDifference`, and `dictionary()` gives an object's fields.
+/// A value's stored form: what its `Codable` conformance encodes, without the formatting. It's the
+/// element of a `CodableDifference`, and `dictionary()` gives an object's fields.
 ///
 /// ```swift
 /// let difference = try CodableDifference(from: original, to: edited)
 /// if case .replace(_, .int(let old), .int(let new))? = difference.first { print(old, new) }
 /// ```
 ///
-/// Dates are stored as seconds since 2001, enums with raw values as their raw value, and an optional
-/// that's `nil` is left out of its object.
+/// A `Date`, `Data`, `UUID`, `Decimal` or `URL` keeps its type, so a value round-trips exactly and a store
+/// with types of its own, such as a database, can map each one. JSON has none of them, so `json` writes
+/// each as `JSONEncoder` does by default, and reading JSON back gives the plain value, which still decodes
+/// as the typed one. Enums with raw values are stored as their raw value, and an optional that's `nil` is
+/// left out of its object.
 public enum CodableRepresentation: Hashable, Sendable {
     case null
     case bool(Bool)
@@ -20,6 +23,16 @@ public enum CodableRepresentation: Hashable, Sendable {
     /// A number with a fractional part, from `Double` or `Float`.
     case double(Double)
     case string(String)
+    /// A `Date`. JSON holds it as seconds since 2001.
+    case date(Date)
+    /// Bytes. JSON holds them as a base64 string.
+    case data(Data)
+    /// A `UUID`. JSON holds it as its `uuidString`.
+    case uuid(UUID)
+    /// A `Decimal`, exactly. JSON holds it as a number.
+    case decimal(Decimal)
+    /// A `URL`. JSON holds it as its `absoluteString`.
+    case url(URL)
     /// The elements of an array or other unkeyed collection, such as a set, in their encoded order.
     case array([CodableRepresentation])
     /// The properties of a struct or class, or the entries of a dictionary, by key.
@@ -138,7 +151,7 @@ extension CodableRepresentation {
 }
 
 extension CodableRepresentation: CustomStringConvertible {
-    /// The tree as JSON, with keys sorted.
+    /// The tree as JSON, with keys sorted and a date in ISO 8601.
     public var description: String {
         switch self {
         case .null: "null"
@@ -147,6 +160,11 @@ extension CodableRepresentation: CustomStringConvertible {
         case .uint(let value): "\(value)"
         case .double(let value): "\(value)"
         case .string(let value): value.debugDescription
+        case .date(let value): value.ISO8601Format().debugDescription
+        case .data(let value): value.base64EncodedString().debugDescription
+        case .uuid(let value): value.uuidString.debugDescription
+        case .decimal(let value): "\(value)"
+        case .url(let value): value.absoluteString.debugDescription
         case .array(let values): "[" + values.map(\.description).joined(separator: ", ") + "]"
         case .object(let object):
             "{" + object.keys.sorted().map { "\($0.debugDescription): \(object[$0]!)" }.joined(separator: ", ") + "}"
@@ -155,7 +173,9 @@ extension CodableRepresentation: CustomStringConvertible {
 }
 
 extension CodableRepresentation: Codable {
-    /// Plain JSON. A whole `double` such as `2.0` may come back as `int`, which decodes the same.
+    /// Plain JSON. A typed value encodes as itself, so `JSONEncoder` writes it by its strategies, and
+    /// reading JSON gives the plain value back: a date's number, or a UUID's string. A whole `double` such
+    /// as `2.0` may come back as `int`. Each decodes as the original type.
     public func encode(to encoder: any Encoder) throws {
         var container = encoder.singleValueContainer()
         switch self {
@@ -165,6 +185,11 @@ extension CodableRepresentation: Codable {
         case .uint(let value): try container.encode(value)
         case .double(let value): try container.encode(value)
         case .string(let value): try container.encode(value)
+        case .date(let value): try container.encode(value)
+        case .data(let value): try container.encode(value)
+        case .uuid(let value): try container.encode(value)
+        case .decimal(let value): try container.encode(value)
+        case .url(let value): try container.encode(value)
         case .array(let values): try container.encode(values)
         case .object(let object): try container.encode(object)
         }
@@ -244,6 +269,11 @@ extension CodableRepresentation {
         case .uint(let value): .uint(value)
         case .double(let value): .double(value)
         case .string(let value): .string(value)
+        case .date(let value): .date(value)
+        case .data(let value): .data(value)
+        case .uuid(let value): .uuid(value)
+        case .decimal(let value): .decimal(value)
+        case .url(let value): .url(value)
         case .array(let values): .array(values.map(CodableRepresentation.init))
         case .object(let object): .object(object.mapValues(CodableRepresentation.init))
         case .merged(let data, _): CodableRepresentation(data)
@@ -261,6 +291,11 @@ extension MergeTree {
         case .uint(let value): .uint(value)
         case .double(let value): .double(value)
         case .string(let value): .string(value)
+        case .date(let value): .date(value)
+        case .data(let value): .data(value)
+        case .uuid(let value): .uuid(value)
+        case .decimal(let value): .decimal(value)
+        case .url(let value): .url(value)
         case .array(let values): .array(values.map(MergeTree.init))
         case .object(let object): .object(object.mapValues(MergeTree.init))
         }

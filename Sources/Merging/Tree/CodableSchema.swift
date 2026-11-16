@@ -20,8 +20,16 @@ public indirect enum CodableSchema: Hashable, Sendable {
     /// `Double` or `Float`.
     case double
     case string
-    /// A `Date`, which encodes as seconds since 2001.
+    /// A `Date`.
     case date
+    /// `Data`.
+    case data
+    /// A `UUID`.
+    case uuid
+    /// A `Decimal`.
+    case decimal
+    /// A `URL`.
+    case url
     /// A `CaseIterable` enum, with each case's encoded value in `allCases` order.
     case enumeration([CodableRepresentation])
     case optional(CodableSchema)
@@ -78,6 +86,10 @@ extension CodableSchema: CustomStringConvertible {
         case .double: "double"
         case .string: "string"
         case .date: "date"
+        case .data: "data"
+        case .uuid: "uuid"
+        case .decimal: "decimal"
+        case .url: "url"
         case .enumeration(let values): values.map(\.description).joined(separator: " | ")
         case .optional(.enumeration(let values)): "(\(CodableSchema.enumeration(values)))?"
         case .optional(let wrapped): "\(wrapped)?"
@@ -111,7 +123,7 @@ extension CodableSchema: Identifiable {
     /// must not change.
     private var canonicalText: String {
         switch self {
-        case .bool, .integer, .double, .string, .date, .enumeration: description
+        case .bool, .integer, .double, .string, .date, .data, .uuid, .decimal, .url, .enumeration: description
         case .optional(let wrapped): wrapped.canonicalText + "?"
         case .array(let element): "[" + element.canonicalText + "]"
         case .set(let element): "set<" + element.canonicalText + ">"
@@ -123,12 +135,12 @@ extension CodableSchema: Identifiable {
 }
 
 extension CodableSchema: Codable {
-    /// Kinds are strings, as in `"string"` or `"date"`, and the rest are tagged: `{"optional": "string"}`,
+    /// Kinds are strings, as in `"string"`, `"date"` or `"uuid"`, and the rest are tagged: `{"optional": "string"}`,
     /// `{"enumeration": ["draft", "done"]}`,
     /// `{"array": "integer"}`, `{"set": "string"}`, `{"dictionary": "bool"}`, `{"object": {"name": "string"}}`.
     public func encode(to encoder: any Encoder) throws {
         switch self {
-        case .bool, .integer, .double, .string, .date:
+        case .bool, .integer, .double, .string, .date, .data, .uuid, .decimal, .url:
             var container = encoder.singleValueContainer()
             try container.encode(description)
         case .optional(let schema), .array(let schema), .set(let schema), .dictionary(let schema):
@@ -151,6 +163,10 @@ extension CodableSchema: Codable {
             case "double": self = .double
             case "string": self = .string
             case "date": self = .date
+            case "data": self = .data
+            case "uuid": self = .uuid
+            case "decimal": self = .decimal
+            case "url": self = .url
             default: throw DecodingError.dataCorrupted(.init(codingPath: decoder.codingPath, debugDescription: "Unknown kind \(kind)"))
             }
             return
@@ -181,21 +197,6 @@ extension CodableSchema: Codable {
         case .dictionary: .dictionary
         case .enumeration: .enumeration
         default: .object
-        }
-    }
-}
-
-extension CodableSchema {
-    /// The shape of one encoded value, for types the probe makes from a real instance.
-    init(shapeOf value: CodableRepresentation) {
-        self = switch value {
-        case .null: .optional(.object([:]))
-        case .bool: .bool
-        case .int, .uint: .integer
-        case .double: .double
-        case .string: .string
-        case .array(let elements): .array(elements.first.map(CodableSchema.init(shapeOf:)) ?? .object([:]))
-        case .object(let object): .object(object.mapValues(CodableSchema.init(shapeOf:)))
         }
     }
 }

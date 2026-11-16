@@ -89,9 +89,10 @@ Without a two-way merge, an `Equatable` value merges only when both sides are eq
 
 ## Representations
 
-`CodableRepresentation` is a value's stored form, as JSON would hold it. `dictionary()` gives an object's
-fields one level deep, keyed by property name, which suits a `CKRecord`'s fields. A nested value stays one
-value.
+`CodableRepresentation` is a value's stored form: what its `Codable` conformance encodes. A `Date`, `Data`,
+`UUID`, `Decimal` or `URL` keeps its type, so a value round-trips exactly and a store with types of its own
+can map each one. `dictionary()` gives an object's fields one level deep, keyed by property name, which suits
+a `CKRecord`'s fields. A nested value stays one value.
 
 ```swift
 let representation = try CodableRepresentation(encoding: person)
@@ -99,6 +100,17 @@ let fields = representation.dictionary()                         // ["age": 30, 
 let rebuilt = try CodableRepresentation.object(fields!).decode(as: Person.self)
 let json = try representation.json                               // {"age":30,"name":"Ana"}, keys sorted
 let same = try CodableRepresentation(data: representation.data)
+```
+
+JSON has no date or UUID, so `json` writes each typed value as `JSONEncoder` does by default: a date as
+seconds since 2001, data as base64, a UUID as its `uuidString`, a decimal as a number, and a URL as its
+`absoluteString`. Reading JSON back gives those plain values, and `decode(as:)` turns them back into the
+typed ones, so a round trip through the type is exact. A decimal with more digits than a `Double` holds
+loses them in JSON. A `Float` is held as the `double` its shortest form reads as, so `0.1` stays `0.1`.
+
+```swift
+let listing = try CodableRepresentation(json: text).decode(as: Listing.self)
+let typed = try CodableRepresentation(encoding: listing)    // ["id": .uuid(…), "listed": .date(…), ...]
 ```
 
 ## Differences
@@ -151,7 +163,7 @@ let squashed = first.followed(by: second)
 ## Schemas
 
 `CodableSchema` reads the shape of a `Decodable` type from the type alone: each property's kind, which
-are optional, which collections are sets, which numbers are dates, and every case of a `CaseIterable` enum. It's `Codable`, so two versions of a model can be compared with `CodableDifference`, and
+are optional, which collections are sets, which values are dates, data, UUIDs, decimals or URLs, and every case of a `CaseIterable` enum. It's `Codable`, so two versions of a model can be compared with `CodableDifference`, and
 `schema[change.path]` says whether a change is at an optional, an array or a dictionary.
 
 ```swift
