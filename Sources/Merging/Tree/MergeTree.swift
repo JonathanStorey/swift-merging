@@ -5,7 +5,7 @@ import Foundation
 enum MergeTree: Equatable, Sendable {
     case null
     case bool(Bool)
-    case integer(Int128)
+    indirect case integer(Int128) // boxed for the same reason as `CodableRepresentation.integer`
     case double(Double)
     case string(String)
     case date(Date)

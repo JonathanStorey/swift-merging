@@ -16,8 +16,10 @@ import Foundation
 public enum CodableRepresentation: Hashable, Sendable {
     case null
     case bool(Bool)
-    /// A whole number, from any integer type up to 64 bits, signed or not.
-    case integer(Int128)
+    /// A whole number, from any integer type up to 64 bits, signed or not. Boxed, so the enum keeps an
+    /// 8-byte alignment: an inline `Int128` gave it 16, and Swift 6.1 on x86-64 Linux then read it from a
+    /// misaligned stack slot and crashed.
+    indirect case integer(Int128)
     /// A number with a fractional part, from `Double` or `Float`, including NaN and the infinities.
     case double(Double)
     case string(String)
