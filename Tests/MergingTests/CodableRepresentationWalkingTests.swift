@@ -32,13 +32,13 @@ import Testing
         #expect(tree[["address", "city"]] == "Oslo")
         #expect(tree[["tags", 1]] == "b")
         #expect(tree[["tags", 5]] == nil)
-        #expect(tree[.root] == tree)
+        #expect(tree[CodablePath()] == tree)
         tree[["address", "city"]] = "Bergen"
         tree[["missing", "deep"]] = 1
         #expect(tree["address"]?["city"] == "Bergen")
         #expect(tree["missing"] == nil)
-        #expect((["items", 0, "title"] as CodableDifference.Path).description == "items[0].title")
-        #expect(CodableDifference.Path.root.description == ".")
+        #expect((["items", 0, "title"] as CodablePath).description == "items[0].title")
+        #expect(CodablePath().description == ".")
     }
 
     @Test func forEachVisitsEveryNodeDepthFirst() {

@@ -68,13 +68,26 @@ import Testing
     }
 
     @Test func pathsReadAsStrings() {
-        let path: CodableDifference.Path = "items[0].title"
-        #expect(path.components == [.key("items"), .index(0), .key("title")])
+        let path: CodablePath = "items[0].title"
+        #expect(Array(path) == [.key("items"), .index(0), .key("title")])
         #expect(path == ["items", 0, "title"])
         #expect(path.description == "items[0].title")
-        #expect(("[2][1]" as CodableDifference.Path).components == [.index(2), .index(1)])
-        #expect(("." as CodableDifference.Path).components.isEmpty)
-        #expect((["config", "v1.2"] as CodableDifference.Path).components == [.key("config"), .key("v1.2")])
+        #expect(Array("[2][1]" as CodablePath) == [.index(2), .index(1)])
+        #expect(("." as CodablePath).isEmpty)
+        #expect(Array(["config", "v1.2"] as CodablePath) == [.key("config"), .key("v1.2")])
+    }
+
+    @Test func pathsAreCollections() {
+        var path: CodablePath = "items[0]"
+        #expect(path.count == 2)
+        #expect(path.last == .index(0))
+        path.append("title")
+        #expect(path == "items[0].title")
+        #expect(path.starts(with: ["items"]))
+        #expect(CodablePath(path.dropLast()) == "items[0]")
+        path[0] = "entries"
+        #expect(path.description == "entries[0].title")
+        #expect(CodablePath() == ".")
     }
 
     @Test func travelsAsJSON() throws {
@@ -100,9 +113,9 @@ import Testing
     @Test func pathsAndValuesEncodeAsPlainJSON() throws {
         let encoder = JSONEncoder()
         encoder.outputFormatting = .sortedKeys
-        let path: CodableDifference.Path = ["config", "v1.2", 0]
+        let path: CodablePath = ["config", "v1.2", 0]
         #expect(String(decoding: try encoder.encode(path), as: UTF8.self) == #"["config","v1.2",0]"#)
-        #expect(try JSONDecoder().decode(CodableDifference.Path.self, from: encoder.encode(path)) == path)
+        #expect(try JSONDecoder().decode(CodablePath.self, from: encoder.encode(path)) == path)
 
         let value: CodableRepresentation = ["name": "Ana", "tags": ["a", nil], "age": 30, "ratio": 0.5, "on": true]
         #expect(String(decoding: try encoder.encode(value), as: UTF8.self)

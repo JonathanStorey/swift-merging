@@ -55,7 +55,7 @@ import Testing
             "child": .optional(.object(["grandchildren": .array(.string)])),
             "scores": .dictionary(.double),
             "born": .date,
-            "id": .string,
+            "id": .uuid,
             "status": .enumeration(["draft", "done"]),
             "flags": .set(.integer),
             "notes": .array(.optional(.string)),

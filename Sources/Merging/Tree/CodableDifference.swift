@@ -9,8 +9,9 @@ import Foundation
 /// let rebuilt = try original.applying(difference) // == edited
 /// ```
 ///
-/// Objects compare key by key and arrays index by index, so an element inserted mid-array shows as
-/// replacements of the ones after it and an insertion at the end.
+/// Objects compare key by key, arrays index by index and sets member by member, so an element inserted
+/// mid-array shows as replacements of the ones after it and an insertion at the end, while a set shows
+/// each member added or removed, at a path such as `tags{"swift"}`.
 ///
 /// A `nil` optional property isn't encoded, so setting one is an insertion and clearing it a removal. An
 /// optional inside an array keeps its place as `null`, so there it's a replacement from or to `.null`.
@@ -21,13 +22,13 @@ public struct CodableDifference: RandomAccessCollection, Hashable, Sendable {
     /// One difference between the two versions.
     public enum Change: Hashable, Sendable {
         /// A property, entry or element only the newer version has.
-        case insert(path: Path, element: ChangeElement)
+        case insert(path: CodablePath, element: ChangeElement)
         /// A property, entry or element only the older version has.
-        case remove(path: Path, element: ChangeElement)
+        case remove(path: CodablePath, element: ChangeElement)
         /// A value that differs between the versions.
-        case replace(path: Path, old: ChangeElement, new: ChangeElement)
+        case replace(path: CodablePath, old: ChangeElement, new: ChangeElement)
 
-        public var path: Path {
+        public var path: CodablePath {
             switch self {
             case .insert(let path, _), .remove(let path, _), .replace(let path, _, _): path
             }
@@ -145,12 +146,12 @@ extension CodableRepresentation {
     /// What changed from `other` to this value, in the order `forEach` visits.
     func difference(from other: CodableRepresentation) -> CodableDifference {
         var changes: [CodableDifference.Change] = []
-        Self.collect(from: other, to: self, at: .root, into: &changes)
+        Self.collect(from: other, to: self, at: CodablePath(), into: &changes)
         return CodableDifference(changes)
     }
 
     private static func collect(
-        from old: CodableRepresentation, to new: CodableRepresentation, at path: CodableDifference.Path, into changes: inout [CodableDifference.Change]
+        from old: CodableRepresentation, to new: CodableRepresentation, at path: CodablePath, into changes: inout [CodableDifference.Change]
     ) {
         guard old != new else { return }
         switch (old, new) {
@@ -165,13 +166,18 @@ extension CodableRepresentation {
                 let new = after.indices.contains(index) ? Optional(after[index]) : .none
                 compare(old, new, at: path.appending(.index(index)), into: &changes)
             }
+        case (.set(let before), .set(let after)):
+            for member in before.symmetricDifference(after).ordered {
+                let memberPath = path.appending(.member(member))
+                changes.append(before.contains(member) ? .remove(path: memberPath, element: member) : .insert(path: memberPath, element: member))
+            }
         default:
             changes.append(.replace(path: path, old: old, new: new))
         }
     }
 
     private static func compare(
-        _ old: CodableRepresentation?, _ new: CodableRepresentation?, at path: CodableDifference.Path, into changes: inout [CodableDifference.Change]
+        _ old: CodableRepresentation?, _ new: CodableRepresentation?, at path: CodablePath, into changes: inout [CodableDifference.Change]
     ) {
         switch (old, new) {
         case let (old?, new?): collect(from: old, to: new, at: path, into: &changes)
@@ -196,12 +202,12 @@ extension CodableRepresentation {
     }
 
     /// Puts `element` at `path`: into an array at its index, shifting what follows, or as an object's entry.
-    private mutating func insert(_ element: CodableRepresentation, at path: CodableDifference.Path) {
-        guard case .index(let index)? = path.components.last else {
+    private mutating func insert(_ element: CodableRepresentation, at path: CodablePath) {
+        guard case .index(let index)? = path.last else {
             self[path] = element
             return
         }
-        let parent = CodableDifference.Path(Array(path.components.dropLast()))
+        let parent = CodablePath(path.dropLast())
         guard case .array(var array)? = self[parent], index <= array.count else { return }
         array.insert(element, at: index)
         self[parent] = .array(array)

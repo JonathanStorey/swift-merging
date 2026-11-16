@@ -89,9 +89,10 @@ Without a two-way merge, an `Equatable` value merges only when both sides are eq
 
 ## Representations
 
-`CodableRepresentation` is a value's stored form, as JSON would hold it. `dictionary()` gives an object's
-fields one level deep, keyed by property name, which suits a `CKRecord`'s fields. A nested value stays one
-value.
+`CodableRepresentation` is a value's stored form: what its `Codable` conformance encodes. A `Date`, `Data`,
+`UUID`, `Decimal` or `URL` keeps its type, and a `Set` is a `.set`, so a value round-trips exactly and a store with types of its own
+can map each one. `dictionary()` gives an object's fields one level deep, keyed by property name, which suits
+a `CKRecord`'s fields. A nested value stays one value.
 
 ```swift
 let representation = try CodableRepresentation(encoding: person)
@@ -101,22 +102,36 @@ let json = try representation.json                               // {"age":30,"n
 let same = try CodableRepresentation(data: representation.data)
 ```
 
+JSON has no date or UUID, so `json` writes each typed value as `JSONEncoder` does by default: a date as
+seconds since 2001, data as base64, a UUID as its `uuidString`, a decimal as a number, and a URL as its
+`absoluteString`. Reading JSON back gives those plain values, and `decode(as:)` turns them back into the
+typed ones, so a round trip through the type is exact. A decimal with more digits than a `Double` holds
+loses them in JSON. A `Float` is held as the `double` its shortest form reads as, so `0.1` stays `0.1`.
+
+```swift
+let listing = try CodableRepresentation(json: text).decode(as: Listing.self)
+let typed = try CodableRepresentation(encoding: listing)    // ["id": .uuid(…), "listed": .date(…), ...]
+```
+
 ## Differences
 
 `CodableDifference` lists what changed between two versions of any `Codable` value, shaped like
-`CollectionDifference`. Each change has a `Path` that reads as a string and a `CodableRepresentation` of the value.
+`CollectionDifference`. Each change has a `CodablePath` that reads as a string and a `CodableRepresentation` of
+the value. A path is a collection of keys and indices, like `IndexPath`.
 
 ```swift
 let difference = try CodableDifference(from: original, to: edited)
 for change in difference { print(change) }   // ~ child.grandchildren[0]: "Ava" → "Eva"
 
-if case .replace(path: "age", old: _, new: .int(let age))? = difference.first { print(age) }
+if case .replace(path: "age", old: _, new: .integer(let age))? = difference.first { print(age) }
 let rebuilt = try original.applying(difference)            // == edited
 let undone = try edited.applying(difference.inverse())     // == original
+let squashed = first.followed(by: second)                  // one difference from first's original to second's result
 ```
 
 Objects compare key by key and arrays index by index, so an element inserted mid-array shows as
-replacements of the ones after it.
+replacements of the ones after it. Sets compare member by member, so each change is one member added or
+removed, at a path such as `tags{"swift"}`.
 
 A difference is `Codable`, so it can be saved or sent to another device and applied there. It carries the
 `CodableSchema` id of the type it was made from, and `applying(_:)` refuses one made for another schema.
@@ -140,18 +155,10 @@ struct Tally: Mergeable {
 }
 ```
 
-`CodableDifference` is `Mergeable`, so two differences made from the same value merge into one, and
-`followed(by:)` squashes one difference and the next into one.
-
-```swift
-let both = try mine.merging(with: yours, from: original, favoring: .theirs)
-let squashed = first.followed(by: second)
-```
-
 ## Schemas
 
 `CodableSchema` reads the shape of a `Decodable` type from the type alone: each property's kind, which
-are optional, which collections are sets, which numbers are dates, and every case of a `CaseIterable` enum. It's `Codable`, so two versions of a model can be compared with `CodableDifference`, and
+are optional, which collections are sets, which values are dates, data, UUIDs, decimals or URLs, and every case of a `CaseIterable` enum. It's `Codable`, so two versions of a model can be compared with `CodableDifference`, and
 `schema[change.path]` says whether a change is at an optional, an array or a dictionary.
 
 ```swift
@@ -162,6 +169,9 @@ schema["child.grandchildren[0]"]    // .string
 
 A raw-value enum must be `CaseIterable`. A type that contains itself, an enum with associated values, or
 an `init(from:)` that rejects placeholder values throws.
+
+[Codable types](Sources/Merging/Tree/README.md) lists the full public surface of `CodableRepresentation`,
+`CodableDifference` and `CodableSchema`.
 
 ## Requirements
 

@@ -1,66 +1,5 @@
 import Foundation
 
-/// Differences made from the same value merge into one difference with both sides' changes. Where both
-/// changed the same place, the favored side's changes win.
-///
-/// ```swift
-/// let both = try mine.merging(with: yours, favoring: .theirs)
-/// let both = try mine.merging(with: yours, from: original, favoring: .ours)   // sets merge by membership
-/// ```
-extension CodableDifference: Mergeable {
-    public typealias MergeBase = CodableRepresentation
-
-    /// Both differences' changes, path by path. A change of the other side's is left out where it clashes
-    /// with one of the favored side's: the same path changed differently, one path inside the other, or
-    /// both sides growing or shrinking the same array.
-    public func merging(with theirs: CodableDifference, favoring side: MergeSide) throws -> CodableDifference {
-        let schemaID = try matchingSchemaID(theirs)
-        let (favored, other) = side == .ours ? (changes, theirs.changes) : (theirs.changes, changes)
-        var merged = favored
-        for change in other where !favored.contains(where: { $0 == change || $0.clashes(with: change) }) {
-            merged.append(change)
-        }
-        return CodableDifference(merged.sorted { $0.path.precedes($1.path) }, schemaID: schemaID)
-    }
-
-    /// Both differences applied to `base` and merged as `CodableTotalMerge` does. A `CodableRepresentation` doesn't
-    /// know which arrays are sets, so a set merges by position here. The overload that takes the typed
-    /// value merges it by membership.
-    public func merging(with theirs: CodableDifference, from base: CodableRepresentation, favoring side: MergeSide) throws -> CodableDifference {
-        let schemaID = try matchingSchemaID(theirs)
-        var ours = base
-        ours.apply(self)
-        var others = base
-        others.apply(theirs)
-        let merged = try MergeTree(ours).merging(with: MergeTree(others), from: MergeTree(base), favoring: side)
-        return CodableDifference(CodableRepresentation(merged).difference(from: base).changes, schemaID: schemaID)
-    }
-
-    /// Both differences applied to `base` and merged by `CodableTotalMerge`, so sets merge by membership and
-    /// dictionaries by key. Throws if either doesn't apply to `base`.
-    public func merging<Value: Codable & Sendable>(with theirs: CodableDifference, from base: Value, favoring side: MergeSide) throws -> CodableDifference {
-        let ours = try base.applying(self)
-        let others = try base.applying(theirs)
-        let merged = CodableTotalMerge<Value>(favoring: side).merge(base: base, ours: ours, theirs: others) ?? (side == .ours ? ours : others)
-        return try CodableDifference(from: base, to: merged)
-    }
-
-    /// Merges `theirs` into this difference, applying both to `base` and merging by `CodableTotalMerge`.
-    public mutating func merge<Value: Codable & Sendable>(with theirs: CodableDifference, from base: Value, favoring side: MergeSide) throws {
-        self = try merging(with: theirs, from: base, favoring: side)
-    }
-
-    /// The schema id both differences share, or the one that has one. Throws if they were made for
-    /// different schemas.
-    private func matchingSchemaID(_ other: CodableDifference) throws -> UUID? {
-        if let schemaID, let otherID = other.schemaID, schemaID != otherID {
-            let reason = "The differences were made for different schemas, \(schemaID) and \(otherID)."
-            throw DecodingError.dataCorrupted(.init(codingPath: [], debugDescription: reason))
-        }
-        return schemaID ?? other.schemaID
-    }
-}
-
 extension CodableDifference {
     /// This difference, then `next`, as one difference from this one's original to `next`'s result. `nil`
     /// if `next` wasn't made from this one's result: it was made for another schema, or it changes a place
@@ -99,20 +38,6 @@ extension CodableDifference {
 }
 
 private extension CodableDifference.Change {
-    /// An insertion or removal of an array element, which changes the array's length.
-    var isStructural: Bool {
-        guard case .index? = path.components.last else { return false }
-        if case .replace = self { return false }
-        return true
-    }
-
-    /// Whether this change and `other`, made from the same original, can't both apply.
-    func clashes(with other: Self) -> Bool {
-        if path == other.path { return self != other }
-        if path.contains(other.path) || other.path.contains(path) { return true }
-        return isStructural && other.isStructural && path.components.dropLast() == other.path.components.dropLast()
-    }
-
     /// This change followed by `next` at the same path: the combined change, `.some(nil)` where they cancel
     /// out, or `nil` where `next` couldn't follow this one.
     func followed(by next: Self) -> Self?? {
@@ -159,8 +84,8 @@ private extension CodableDifference.Change {
     }
 
     /// This change with its path made relative to `ancestor`, which contains it.
-    func relative(to ancestor: CodableDifference.Path) -> Self {
-        let path = CodableDifference.Path(Array(path.components.dropFirst(ancestor.components.count)))
+    func relative(to ancestor: CodablePath) -> Self {
+        let path = CodablePath(path.dropFirst(ancestor.count))
         return switch self {
         case .insert(_, let element): .insert(path: path, element: element)
         case .remove(_, let element): .remove(path: path, element: element)
@@ -169,23 +94,34 @@ private extension CodableDifference.Change {
     }
 }
 
-private extension CodableDifference.Path {
+private extension CodablePath {
     /// Whether `other` lies strictly inside this path.
     func contains(_ other: Self) -> Bool {
-        other.components.count > components.count && other.components.starts(with: components)
+        other.count > count && other.starts(with: self)
     }
 
-    /// Whether this path comes first in the order `forEach` visits: keys sorted, indices ascending, and a
-    /// path before the paths inside it.
+    /// Whether this path comes first in the order `forEach` visits: keys sorted, indices ascending, members
+    /// by their text, and a path before the paths inside it.
     func precedes(_ other: Self) -> Bool {
-        for (component, otherComponent) in zip(components, other.components) where component != otherComponent {
+        for (component, otherComponent) in zip(self, other) where component != otherComponent {
             switch (component, otherComponent) {
             case let (.key(key), .key(otherKey)): return key < otherKey
             case let (.index(index), .index(otherIndex)): return index < otherIndex
-            case (.key, .index): return true
-            case (.index, .key): return false
+            case let (.member(member), .member(otherMember)): return member.description < otherMember.description
+            default: return component.rank < otherComponent.rank
             }
         }
-        return components.count < other.components.count
+        return count < other.count
+    }
+}
+
+private extension CodablePath.Component {
+    /// Keys before indices before members, where different kinds meet at one level.
+    var rank: Int {
+        switch self {
+        case .key: 0
+        case .index: 1
+        case .member: 2
+        }
     }
 }

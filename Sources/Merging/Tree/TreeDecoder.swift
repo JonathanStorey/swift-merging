@@ -1,3 +1,5 @@
+import Foundation
+
 /// Decodes a value from a `MergeTree`.
 struct TreeDecoder {
     func decode<T: Decodable>(_ type: T.Type, from tree: MergeTree) throws -> T {
@@ -33,8 +35,7 @@ private struct Reader: Decoder {
     func read(_ type: Double.Type) throws -> Double {
         switch tree {
         case .double(let value): value
-        case .int(let value): Double(value)
-        case .uint(let value): Double(value)
+        case .integer(let value): Double(value)
         default: throw mismatch(type)
         }
     }
@@ -45,8 +46,7 @@ private struct Reader: Decoder {
 
     func read<T: FixedWidthInteger & Decodable>(_ type: T.Type) throws -> T {
         let value: T? = switch tree {
-        case .int(let value): T(exactly: value)
-        case .uint(let value): T(exactly: value)
+        case .integer(let value): T(exactly: value)
         case .double(let value): T(exactly: value)
         default: nil
         }
@@ -55,7 +55,54 @@ private struct Reader: Decoder {
     }
 
     func read<T: Decodable>(_ type: T.Type) throws -> T {
-        try T(from: self)
+        if let leaf = try leaf(type) { return leaf }
+        return try T(from: self)
+    }
+
+    /// A `Date`, `Data`, `UUID`, `Decimal` or `URL` from its typed leaf, or from the plain value JSON holds
+    /// it as. A `CodableRepresentation` is this tree. `nil` for any other type.
+    private func leaf<T>(_ type: T.Type) throws -> T? {
+        let value: Any?
+        switch type {
+        case is CodableRepresentation.Type:
+            value = CodableRepresentation(tree)
+        case is Date.Type:
+            value = switch tree {
+            case .date(let value): value
+            case .double, .integer: Date(timeIntervalSinceReferenceDate: try read(Double.self))
+            default: nil
+            }
+        case is Data.Type:
+            value = switch tree {
+            case .data(let value): value
+            case .string(let value): Data(base64Encoded: value)
+            default: nil
+            }
+        case is UUID.Type:
+            value = switch tree {
+            case .uuid(let value): value
+            case .string(let value): UUID(uuidString: value)
+            default: nil
+            }
+        case is Decimal.Type:
+            value = switch tree {
+            case .decimal(let value): value
+            case .integer(let value): Decimal(string: "\(value)")
+            case .double(let value): Decimal(string: "\(value)")
+            case .string(let value): Decimal(string: value)
+            default: nil
+            }
+        case is URL.Type:
+            value = switch tree {
+            case .url(let value): value
+            case .string(let value): URL(string: value)
+            default: nil
+            }
+        default:
+            return nil
+        }
+        guard let value = value as? T else { throw mismatch(type) }
+        return value
     }
 
     func mismatch(_ type: Any.Type) -> DecodingError {
