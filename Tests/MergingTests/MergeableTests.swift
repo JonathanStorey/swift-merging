@@ -55,64 +55,6 @@ import Testing
         #expect(board.$tally.merging(with: Tally(count: 5)) == Tally(count: 3))
     }
 
-    @Test func differencesMergeWithoutABase() throws {
-        var mine = base
-        mine.title = "B"
-        var yours = base
-        yours.body = "y"
-        let merged = try CodableDifference(from: base, to: mine).merging(with: CodableDifference(from: base, to: yours), favoring: .ours)
-        #expect(try base.applying(merged) == Note(title: "B", body: "y"))
-
-        yours.title = "C"
-        let clash = try CodableDifference(from: base, to: yours)
-        #expect(try base.applying(CodableDifference(from: base, to: mine).merging(with: clash, favoring: .ours)).title == "B")
-        #expect(try base.applying(CodableDifference(from: base, to: mine).merging(with: clash, favoring: .theirs)).title == "C")
-    }
-
-    @Test func arraysThatBothSidesResizeTakeTheFavoredSide() throws {
-        var mine = base
-        mine.tags = ["a", "b"]
-        var yours = base
-        yours.tags = []
-        let ours = try CodableDifference(from: base, to: mine)
-        let theirs = try CodableDifference(from: base, to: yours)
-        #expect(try base.applying(ours.merging(with: theirs, favoring: .ours)).tags == ["a", "b"])
-        #expect(try base.applying(ours.merging(with: theirs, favoring: .theirs)).tags == [])
-    }
-
-    @Test func differencesMergeFromABase() throws {
-        var mine = base
-        mine.title = "B"
-        var yours = base
-        yours.body = "y"
-        let ours = try CodableDifference(from: base, to: mine)
-        let theirs = try CodableDifference(from: base, to: yours)
-        let typed = try ours.merging(with: theirs, from: base, favoring: .ours)
-        #expect(try base.applying(typed) == Note(title: "B", body: "y"))
-        let encodedBase: CodableRepresentation = ["title": "A", "body": "x", "tags": ["a"]]
-        let encoded = try ours.merging(with: theirs, from: encodedBase, favoring: .ours)
-        #expect(try base.applying(encoded) == Note(title: "B", body: "y"))
-
-        var mutated = ours
-        try mutated.merge(with: theirs, from: base, favoring: .ours)
-        #expect(mutated == typed)
-    }
-
-    @Test func aTypedBaseMergesSetsByMembership() throws {
-        let start = Bag(items: ["a"])
-        let ours = try CodableDifference(from: start, to: Bag(items: ["a", "b"]))
-        let theirs = try CodableDifference(from: start, to: Bag(items: ["a", "c"]))
-        let merged = try ours.merging(with: theirs, from: start, favoring: .ours)
-        #expect(try start.applying(merged) == Bag(items: ["a", "b", "c"]))
-    }
-
-    @Test func differencesForAnotherSchemaDoNotMerge() throws {
-        let notes = try CodableDifference(from: base, to: Note(title: "B"))
-        let bags = try CodableDifference(from: Bag(items: []), to: Bag(items: ["a"]))
-        #expect(throws: DecodingError.self) { try notes.merging(with: bags, favoring: .ours) }
-        #expect(notes.followed(by: bags) == nil)
-    }
-
     @Test func followedBySquashesTwoDifferences() throws {
         let middle = Note(title: "B", tags: ["a", "b"])
         let end = Note(title: "C", body: "z")

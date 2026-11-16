@@ -116,7 +116,8 @@ let typed = try CodableRepresentation(encoding: listing)    // ["id": .uuid(…)
 ## Differences
 
 `CodableDifference` lists what changed between two versions of any `Codable` value, shaped like
-`CollectionDifference`. Each change has a `Path` that reads as a string and a `CodableRepresentation` of the value.
+`CollectionDifference`. Each change has a `CodablePath` that reads as a string and a `CodableRepresentation` of
+the value. A path is a collection of keys and indices, like `IndexPath`.
 
 ```swift
 let difference = try CodableDifference(from: original, to: edited)
@@ -125,6 +126,7 @@ for change in difference { print(change) }   // ~ child.grandchildren[0]: "Ava" 
 if case .replace(path: "age", old: _, new: .int(let age))? = difference.first { print(age) }
 let rebuilt = try original.applying(difference)            // == edited
 let undone = try edited.applying(difference.inverse())     // == original
+let squashed = first.followed(by: second)                  // one difference from first's original to second's result
 ```
 
 Objects compare key by key and arrays index by index, so an element inserted mid-array shows as
@@ -150,14 +152,6 @@ struct Tally: Mergeable {
         Tally(count: count + theirs.count - base.count)
     }
 }
-```
-
-`CodableDifference` is `Mergeable`, so two differences made from the same value merge into one, and
-`followed(by:)` squashes one difference and the next into one.
-
-```swift
-let both = try mine.merging(with: yours, from: original, favoring: .theirs)
-let squashed = first.followed(by: second)
 ```
 
 ## Schemas

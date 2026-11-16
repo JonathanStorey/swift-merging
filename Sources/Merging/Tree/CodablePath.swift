@@ -1,44 +1,57 @@
-extension CodableDifference {
-    /// Where a change sits in a value: the keys and indices that lead to it, written and printed as
-    /// `"child.grandchildren[2]"`.
-    ///
-    /// ```swift
-    /// change.path == "address.city"                          // a string literal, parsed where it's written
-    /// let exact: CodableDifference.Path = ["config", "v1.2"] // an array literal, for a key with a dot
-    /// if case .index(let index)? = change.path.components.last { print(index) }
-    /// ```
-    public struct Path: Hashable, Sendable {
-        public enum Component: Hashable, Sendable {
-            /// An object's property or entry.
-            case key(String)
-            /// An array's element.
-            case index(Int)
-        }
+/// Where a value sits inside another: the keys and indices that lead to it, written and printed as
+/// `"child.grandchildren[2]"`. A collection of its components, like `IndexPath`.
+///
+/// ```swift
+/// change.path == "address.city"                     // a string literal, parsed where it's written
+/// let exact: CodablePath = ["config", "v1.2"]       // an array literal, for a key with a dot
+/// if case .index(let index)? = change.path.last { print(index) }
+/// schema["child.grandchildren[0]"]                  // .string
+/// ```
+public struct CodablePath: Hashable, Sendable {
+    public enum Component: Hashable, Sendable {
+        /// An object's property or entry.
+        case key(String)
+        /// An array's element.
+        case index(Int)
+    }
 
-        public var components: [Component]
+    var components: [Component]
 
-        public init(_ components: [Component]) {
-            self.components = components
-        }
+    /// The path to the value itself.
+    public init() {
+        components = []
+    }
 
-        /// The path to the value itself.
-        static let root = Path([])
+    func appending(_ component: Component) -> CodablePath {
+        var path = self
+        path.append(component)
+        return path
+    }
+}
 
-        func appending(_ component: Component) -> Path {
-            Path(components + [component])
-        }
+extension CodablePath: RandomAccessCollection, MutableCollection, RangeReplaceableCollection {
+    public var startIndex: Int { components.startIndex }
+    public var endIndex: Int { components.endIndex }
+
+    public subscript(position: Int) -> Component {
+        get { components[position] }
+        set { components[position] = newValue }
+    }
+
+    public mutating func replaceSubrange(_ subrange: Range<Int>, with newElements: some Collection<Component>) {
+        components.replaceSubrange(subrange, with: newElements)
     }
 }
 
 extension CodableRepresentation {
     /// The node at `path`, if the tree has one there. Setting it replaces that node, and setting `nil`
     /// removes it. Setting a path whose parent doesn't exist does nothing.
-    subscript(path: CodableDifference.Path) -> CodableRepresentation? {
+    subscript(path: CodablePath) -> CodableRepresentation? {
         get { self[path.components[...]] }
         set { self[path.components[...]] = newValue }
     }
 
-    private subscript(components: ArraySlice<CodableDifference.Path.Component>) -> CodableRepresentation? {
+    private subscript(components: ArraySlice<CodablePath.Component>) -> CodableRepresentation? {
         get {
             guard let first = components.first else { return self }
             return self[first]?[components.dropFirst()]
@@ -59,7 +72,7 @@ extension CodableRepresentation {
         }
     }
 
-    private subscript(component: CodableDifference.Path.Component) -> CodableRepresentation? {
+    private subscript(component: CodablePath.Component) -> CodableRepresentation? {
         get {
             switch component {
             case .key(let key): self[key]
@@ -79,11 +92,11 @@ extension CodableRepresentation {
     /// ```swift
     /// tree.forEach { path, node in print(path, node) }
     /// ```
-    func forEach(_ body: (CodableDifference.Path, CodableRepresentation) throws -> Void) rethrows {
-        try walk(from: .root, body)
+    func forEach(_ body: (CodablePath, CodableRepresentation) throws -> Void) rethrows {
+        try walk(from: CodablePath(), body)
     }
 
-    private func walk(from path: CodableDifference.Path, _ body: (CodableDifference.Path, CodableRepresentation) throws -> Void) rethrows {
+    private func walk(from path: CodablePath, _ body: (CodablePath, CodableRepresentation) throws -> Void) rethrows {
         try body(path, self)
         switch self {
         case .array(let array):
@@ -96,13 +109,13 @@ extension CodableRepresentation {
     }
 }
 
-extension CodableDifference.Path: ExpressibleByArrayLiteral {
+extension CodablePath: ExpressibleByArrayLiteral {
     public init(arrayLiteral components: Component...) {
         self.init(components)
     }
 }
 
-extension CodableDifference.Path: ExpressibleByStringLiteral {
+extension CodablePath: ExpressibleByStringLiteral {
     /// Keys separated by dots, with indices in brackets: `"items[0].title"`, or `"."` for the value itself.
     /// A key that holds a dot or a bracket needs the array literal instead.
     public init(stringLiteral path: String) {
@@ -122,17 +135,17 @@ extension CodableDifference.Path: ExpressibleByStringLiteral {
     }
 }
 
-extension CodableDifference.Path.Component: ExpressibleByStringLiteral, ExpressibleByIntegerLiteral {
+extension CodablePath.Component: ExpressibleByStringLiteral, ExpressibleByIntegerLiteral {
     public init(stringLiteral key: String) { self = .key(key) }
     public init(integerLiteral index: Int) { self = .index(index) }
 }
 
-extension CodableDifference.Path: CustomStringConvertible {
+extension CodablePath: CustomStringConvertible {
     /// Keys joined with dots and indices in brackets, as in `items[0].title`. The value itself is `.`.
     public var description: String {
-        guard !components.isEmpty else { return "." }
+        guard !isEmpty else { return "." }
         var text = ""
-        for component in components {
+        for component in self {
             switch component {
             case .key(let key): text += text.isEmpty ? key : "." + key
             case .index(let index): text += "[\(index)]"
@@ -142,7 +155,7 @@ extension CodableDifference.Path: CustomStringConvertible {
     }
 }
 
-extension CodableDifference.Path: Codable {
+extension CodablePath: Codable {
     /// The keys and indices as an array: `["child", "grandchildren", 0]`.
     public func encode(to encoder: any Encoder) throws {
         var container = encoder.singleValueContainer()
@@ -154,7 +167,7 @@ extension CodableDifference.Path: Codable {
     }
 }
 
-extension CodableDifference.Path.Component: Codable {
+extension CodablePath.Component: Codable {
     /// A key as a string and an index as a number.
     public func encode(to encoder: any Encoder) throws {
         var container = encoder.singleValueContainer()

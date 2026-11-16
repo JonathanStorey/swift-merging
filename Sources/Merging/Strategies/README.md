@@ -207,7 +207,7 @@ named side where both changed the same thing.
 - **Good for:** a type that knows how to merge itself, such as a counter or a document model.
 - **Needs a base:** No. Without one it uses the type's two-way `merging`.
 - **Conflicts:** only where the type's merge throws, which is `nil` here.
-- **Watch for:** the type's base must be the type itself, so `CodableDifference` doesn't fit.
+- **Watch for:** the type's base must be the type itself.
 
 ## .sum
 

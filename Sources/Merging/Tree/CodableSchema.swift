@@ -42,8 +42,6 @@ public indirect enum CodableSchema: Hashable, Sendable {
     /// A struct or class, by property.
     case object([String: CodableSchema])
 
-    public typealias Path = CodableDifference.Path
-
     /// The schema of `type`, from what its `init(from:)` asks a decoder for.
     public init<T: Decodable>(_ type: T.Type) throws {
         let key = ObjectIdentifier(type)
@@ -59,9 +57,9 @@ public indirect enum CodableSchema: Hashable, Sendable {
 
     /// The schema at `path`. An index steps into an array's elements, a key into an object's property or
     /// a dictionary's values, and either looks through an optional.
-    public subscript(path: Path) -> CodableSchema? {
+    public subscript(path: CodablePath) -> CodableSchema? {
         var schema = self
-        for component in path.components {
+        for component in path {
             if case .optional(let wrapped) = schema { schema = wrapped }
             switch (component, schema) {
             case (.key(let key), .object(let object)):

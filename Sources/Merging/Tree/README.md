@@ -1,17 +1,17 @@
 # Codable types
 
-The public surface of `CodableRepresentation`, `CodableDifference` and `CodableSchema`, with the types
-nested in them. They are the only public `Codable…` types apart from the strategies `CodableTotalMerge` and
+The public surface of `CodableRepresentation`, `CodableDifference`, `CodablePath` and `CodableSchema`, with
+the types nested in them. They are the only public `Codable…` types apart from the strategies `CodableTotalMerge` and
 `CodableNodeMerge`, which [Strategies](../Strategies/README.md) covers. Everything else in this folder
 (`MergeTree`, `TreeEncoder`, `TreeDecoder`, `SchemaProbe`) is internal.
 
 | Type | Kind | Conforms to |
 | --- | --- | --- |
 | `CodableRepresentation` | enum | `Hashable`, `Sendable`, `Codable`, `CustomStringConvertible`, the seven `ExpressibleBy…Literal` protocols |
-| `CodableDifference` | struct | `RandomAccessCollection`, `Hashable`, `Sendable`, `Codable`, `Mergeable` |
+| `CodableDifference` | struct | `RandomAccessCollection`, `Hashable`, `Sendable`, `Codable` |
 | `CodableDifference.Change` | enum | `Hashable`, `Sendable`, `Codable`, `CustomStringConvertible` |
-| `CodableDifference.Path` | struct | `Hashable`, `Sendable`, `Codable`, `CustomStringConvertible`, `ExpressibleByStringLiteral`, `ExpressibleByArrayLiteral` |
-| `CodableDifference.Path.Component` | enum | `Hashable`, `Sendable`, `Codable`, `ExpressibleByStringLiteral`, `ExpressibleByIntegerLiteral` |
+| `CodablePath` | struct | `RandomAccessCollection`, `MutableCollection`, `RangeReplaceableCollection`, `Hashable`, `Sendable`, `Codable`, `CustomStringConvertible`, `ExpressibleByStringLiteral`, `ExpressibleByArrayLiteral` |
+| `CodablePath.Component` | enum | `Hashable`, `Sendable`, `Codable`, `ExpressibleByStringLiteral`, `ExpressibleByIntegerLiteral` |
 | `CodableSchema` | indirect enum | `Hashable`, `Sendable`, `Codable`, `CustomStringConvertible`, `Identifiable` |
 
 ## CodableRepresentation
@@ -62,32 +62,30 @@ What changed between two versions of a `Codable` value, shaped like `CollectionD
 | By kind | `var insertions: [Change]`, `var removals: [Change]`, `var replacements: [Change]` |
 | Undo | `func inverse() -> CodableDifference` |
 | Squash | `func followed(by next: CodableDifference) -> CodableDifference?` |
-| Merge (`Mergeable`) | `typealias MergeBase = CodableRepresentation` |
-| | `func merging(with theirs: CodableDifference, favoring side: MergeSide) throws -> CodableDifference` |
-| | `func merging(with theirs: CodableDifference, from base: CodableRepresentation, favoring side: MergeSide) throws -> CodableDifference` |
-| Merge with a typed base | `func merging<Value: Codable & Sendable>(with theirs: CodableDifference, from base: Value, favoring side: MergeSide) throws -> CodableDifference` |
-| | `mutating func merge<Value: Codable & Sendable>(with theirs: CodableDifference, from base: Value, favoring side: MergeSide) throws` |
 | Codable | `{"schemaID": "…", "changes": [...]}` |
-
-Through `Mergeable` it also gets `mutating func merge(with:favoring:)`, `mutating func merge(with:from:favoring:)`,
-`static func merge(ours:theirs:favoring:)` and `static func merge(base:ours:theirs:favoring:)`.
 
 ### Change
 
 | Member | Signature |
 | --- | --- |
-| Cases | `insert(path: Path, element: ChangeElement)`, `remove(path: Path, element: ChangeElement)`, `replace(path: Path, old: ChangeElement, new: ChangeElement)` |
-| Where | `var path: Path` |
+| Cases | `insert(path: CodablePath, element: ChangeElement)`, `remove(path: CodablePath, element: ChangeElement)`, `replace(path: CodablePath, old: ChangeElement, new: ChangeElement)` |
+| Where | `var path: CodablePath` |
 | Text | `var description: String`, as `+ path: new`, `- path: old` or `~ path: old → new` |
 
-### Path and Component
+## CodablePath
+
+Where a value sits inside another, as keys and indices. A collection of `Component`, like `IndexPath` is of
+`Int`, so `count`, `last`, `starts(with:)`, `append(_:)`, `dropLast()` and the rest come from the standard
+library.
 
 | Member | Signature |
 | --- | --- |
-| Components | `var components: [Component]`, `init(_ components: [Component])` |
+| The value itself | `init()` |
+| From components | `init(_ elements: some Sequence<Component>)`, from `RangeReplaceableCollection` |
+| Collection | `var startIndex: Int`, `var endIndex: Int`, `subscript(position: Int) -> Component { get set }`, `mutating func replaceSubrange(_:with:)` |
 | Component cases | `key(String)`, `index(Int)` |
 | Literals | `"child.grandchildren[2]"` parsed, `["config", "v1.2"]` exact, a component from `"key"` or `2` |
-| Text | `var description: String`, as `child.grandchildren[2]` |
+| Text | `var description: String`, as `child.grandchildren[2]`, or `.` for the value itself |
 | Codable | an array of strings and integers |
 
 ## CodableSchema
@@ -108,9 +106,8 @@ public indirect enum CodableSchema {
 
 | Member | Signature |
 | --- | --- |
-| Path type | `typealias Path = CodableDifference.Path` |
 | Read a type | `init<T: Decodable>(_ type: T.Type) throws` |
-| Look up | `subscript(path: Path) -> CodableSchema?` |
+| Look up | `subscript(path: CodablePath) -> CodableSchema?` |
 | Stable id | `var id: UUID`, a version 8 UUID hashed from the schema |
 | Text | `var description: String`, as `{age: integer, id: uuid, name: string?}` |
 | Codable | `"string"`, `{"optional": "string"}`, `{"object": {…}}` |
@@ -131,35 +128,10 @@ Every `Codable` type gets `applying(_:)`. It mirrors `BidirectionalCollection.ap
 Internally, `Set` and `Dictionary` conform to `MergeKinded` so the encoder can mark them. That conformance
 isn't visible outside the module.
 
-## Where the surface could trim or align
+## Possible further changes
 
-In order of value:
-
-1. **Make `Path` a collection, like `IndexPath`.** `Path` is an array of components wrapped in a struct, so
-   it should be a `RandomAccessCollection` and `RangeReplaceableCollection` of `Component`, as `IndexPath`
-   is of `Int`. Then `count`, `last`, `starts(with:)`, `dropLast()`, `append(_:)` and `+` come for free, and
-   `components` can go. `if case .index(let i)? = path.last` reads better than
-   `path.components.last`.
-2. **Make `CodableDifference.init(_:schemaID:)` public, as `CollectionDifference.init?(_:)` is.** Right now
-   `difference.filter { … }` gives `[Change]` with no way back to a difference. A public
-   `init?(_ changes: some Sequence<Change>, schemaID: UUID? = nil)` lets a caller drop or keep changes by
-   path and still apply the result. Like the standard library's init, it would return `nil` for changes
-   that can't belong together, such as two at the same path.
-3. **The two `merging(with:from:favoring:)` overloads on `CodableDifference` share labels but merge
-   differently.** With a `CodableRepresentation` base, a set merges by position. With a typed base, it
-   merges by membership. The caller can't tell from the call site. Relabeling the typed one as
-   `merging(with:applyingTo:favoring:)` would make the difference visible. The other option is dropping the
-   mutating typed overload, since `Mergeable` already supplies a mutating one.
-4. **Hoist `Path` to the top level as `CodablePath`.** It's used by `CodableDifference`, `CodableSchema`
-   and, internally, `CodableRepresentation`, so it doesn't belong to `CodableDifference` alone. This adds a
-   top-level name but removes the `CodableSchema.Path` typealias. It is optional, and it pairs well with
-   item 1.
-5. **Consider dropping `ChangeElement`.** It exists to echo `CollectionDifference<ChangeElement>`, but
-   there it's a generic parameter, and here it's always `CodableRepresentation`. Keeping it costs little,
-   so this is the weakest item.
-
-What I would keep as it is:
-- `dictionary()`, even though it overlaps `if case .object(let fields)`, because it names the CloudKit use.
-- `init(encoding:)` and `decode(as:)`, which mirror `JSONDecoder.decode(_:from:)`.
-- The literal conformances.
-- `CodableSchema`'s cached `init(_:)` and its `Identifiable` id.
+- **`Mergeable.MergeBase`** existed so `CodableDifference` could merge from a `CodableRepresentation`. With
+  that conformance gone, every `Mergeable` type's base is itself, so the associated type could go, and
+  `MergeableMerge`'s `where Value.MergeBase == Value` with it.
+- **A public `CodableDifference.init?(_:schemaID:)`**, like `CollectionDifference.init?(_:)`, was
+  considered and left out.
