@@ -32,10 +32,6 @@ import Testing
         var child: Child?
     }
 
-    struct Bag: Codable, Equatable, Sendable {
-        var items: Set<String>
-    }
-
     let base = Note()
 
     @Test func twoFunctionsGiveSix() throws {

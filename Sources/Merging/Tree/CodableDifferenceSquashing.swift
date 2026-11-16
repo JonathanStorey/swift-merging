@@ -100,17 +100,28 @@ private extension CodablePath {
         other.count > count && other.starts(with: self)
     }
 
-    /// Whether this path comes first in the order `forEach` visits: keys sorted, indices ascending, and a
-    /// path before the paths inside it.
+    /// Whether this path comes first in the order `forEach` visits: keys sorted, indices ascending, members
+    /// by their text, and a path before the paths inside it.
     func precedes(_ other: Self) -> Bool {
         for (component, otherComponent) in zip(self, other) where component != otherComponent {
             switch (component, otherComponent) {
             case let (.key(key), .key(otherKey)): return key < otherKey
             case let (.index(index), .index(otherIndex)): return index < otherIndex
-            case (.key, .index): return true
-            case (.index, .key): return false
+            case let (.member(member), .member(otherMember)): return member.description < otherMember.description
+            default: return component.rank < otherComponent.rank
             }
         }
         return count < other.count
+    }
+}
+
+private extension CodablePath.Component {
+    /// Keys before indices before members, where different kinds meet at one level.
+    var rank: Int {
+        switch self {
+        case .key: 0
+        case .index: 1
+        case .member: 2
+        }
     }
 }

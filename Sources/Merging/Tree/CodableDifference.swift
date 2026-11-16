@@ -9,8 +9,9 @@ import Foundation
 /// let rebuilt = try original.applying(difference) // == edited
 /// ```
 ///
-/// Objects compare key by key and arrays index by index, so an element inserted mid-array shows as
-/// replacements of the ones after it and an insertion at the end.
+/// Objects compare key by key, arrays index by index and sets member by member, so an element inserted
+/// mid-array shows as replacements of the ones after it and an insertion at the end, while a set shows
+/// each member added or removed, at a path such as `tags{"swift"}`.
 ///
 /// A `nil` optional property isn't encoded, so setting one is an insertion and clearing it a removal. An
 /// optional inside an array keeps its place as `null`, so there it's a replacement from or to `.null`.
@@ -164,6 +165,11 @@ extension CodableRepresentation {
                 let old = before.indices.contains(index) ? Optional(before[index]) : .none
                 let new = after.indices.contains(index) ? Optional(after[index]) : .none
                 compare(old, new, at: path.appending(.index(index)), into: &changes)
+            }
+        case (.set(let before), .set(let after)):
+            for member in before.symmetricDifference(after).ordered {
+                let memberPath = path.appending(.member(member))
+                changes.append(before.contains(member) ? .remove(path: memberPath, element: member) : .insert(path: memberPath, element: member))
             }
         default:
             changes.append(.replace(path: path, old: old, new: new))

@@ -90,7 +90,7 @@ Without a two-way merge, an `Equatable` value merges only when both sides are eq
 ## Representations
 
 `CodableRepresentation` is a value's stored form: what its `Codable` conformance encodes. A `Date`, `Data`,
-`UUID`, `Decimal` or `URL` keeps its type, so a value round-trips exactly and a store with types of its own
+`UUID`, `Decimal` or `URL` keeps its type, and a `Set` is a `.set`, so a value round-trips exactly and a store with types of its own
 can map each one. `dictionary()` gives an object's fields one level deep, keyed by property name, which suits
 a `CKRecord`'s fields. A nested value stays one value.
 
@@ -130,7 +130,8 @@ let squashed = first.followed(by: second)                  // one difference fro
 ```
 
 Objects compare key by key and arrays index by index, so an element inserted mid-array shows as
-replacements of the ones after it.
+replacements of the ones after it. Sets compare member by member, so each change is one member added or
+removed, at a path such as `tags{"swift"}`.
 
 A difference is `Codable`, so it can be saved or sent to another device and applied there. It carries the
 `CodableSchema` id of the type it was made from, and `applying(_:)` refuses one made for another schema.

@@ -33,8 +33,10 @@ public enum CodableRepresentation: Hashable, Sendable {
     case decimal(Decimal)
     /// A `URL`. JSON holds it as its `absoluteString`.
     case url(URL)
-    /// The elements of an array or other unkeyed collection, such as a set, in their encoded order.
+    /// The elements of an array or other unkeyed collection, in their encoded order.
     case array([CodableRepresentation])
+    /// The members of a `Set`, which has no order. JSON holds it as an array.
+    case set(Set<CodableRepresentation>)
     /// The properties of a struct or class, or the entries of a dictionary, by key.
     case object([String: CodableRepresentation])
 }
@@ -110,6 +112,11 @@ extension CodableRepresentation {
         return value
     }
 
+    var members: Set<CodableRepresentation>? {
+        guard case .set(let value) = self else { return nil }
+        return value
+    }
+
     /// The property or entry for `key`, if this is an object that has it. Setting it adds or replaces the
     /// entry, and setting `nil` removes it. Setting it on anything but an object does nothing.
     ///
@@ -144,6 +151,7 @@ extension CodableRepresentation {
     var children: [CodableRepresentation] {
         switch self {
         case .array(let array): array
+        case .set(let members): members.ordered
         case .object(let object): object.keys.sorted().map { object[$0]! }
         default: []
         }
@@ -151,7 +159,7 @@ extension CodableRepresentation {
 }
 
 extension CodableRepresentation: CustomStringConvertible {
-    /// The tree as JSON, with keys sorted and a date in ISO 8601.
+    /// The tree as JSON, with keys and set members sorted and a date in ISO 8601.
     public var description: String {
         switch self {
         case .null: "null"
@@ -166,6 +174,7 @@ extension CodableRepresentation: CustomStringConvertible {
         case .decimal(let value): "\(value)"
         case .url(let value): value.absoluteString.debugDescription
         case .array(let values): "[" + values.map(\.description).joined(separator: ", ") + "]"
+        case .set(let members): "[" + members.ordered.map(\.description).joined(separator: ", ") + "]"
         case .object(let object):
             "{" + object.keys.sorted().map { "\($0.debugDescription): \(object[$0]!)" }.joined(separator: ", ") + "}"
         }
@@ -191,6 +200,7 @@ extension CodableRepresentation: Codable {
         case .decimal(let value): try container.encode(value)
         case .url(let value): try container.encode(value)
         case .array(let values): try container.encode(values)
+        case .set(let members): try container.encode(members.ordered)
         case .object(let object): try container.encode(object)
         }
     }
@@ -218,7 +228,7 @@ extension CodableRepresentation: Codable {
 }
 
 extension CodableRepresentation {
-    /// Compact JSON, UTF-8 encoded, with keys sorted so equal representations give equal data. Throws for
+    /// Compact JSON, UTF-8 encoded, with keys and set members sorted so equal representations give equal data. Throws for
     /// a `double` that JSON can't hold, such as infinity.
     public var data: Data {
         get throws {
@@ -260,7 +270,7 @@ extension CodableRepresentation: ExpressibleByNilLiteral, ExpressibleByBooleanLi
 }
 
 extension CodableRepresentation {
-    /// The merge tree's data, without its merge kinds.
+    /// The merge tree's data, with a set as `.set` and no other merge kinds.
     init(_ tree: MergeTree) {
         self = switch tree {
         case .null: .null
@@ -276,13 +286,14 @@ extension CodableRepresentation {
         case .url(let value): .url(value)
         case .array(let values): .array(values.map(CodableRepresentation.init))
         case .object(let object): .object(object.mapValues(CodableRepresentation.init))
+        case .merged(.array(let values), .set): .set(Set(values.map(CodableRepresentation.init)))
         case .merged(let data, _): CodableRepresentation(data)
         }
     }
 }
 
 extension MergeTree {
-    /// A merge tree of this tree's data, with no merge kinds.
+    /// A merge tree of this tree's data, with a set marked as one.
     init(_ tree: CodableRepresentation) {
         self = switch tree {
         case .null: .null
@@ -297,6 +308,7 @@ extension MergeTree {
         case .decimal(let value): .decimal(value)
         case .url(let value): .url(value)
         case .array(let values): .array(values.map(MergeTree.init))
+        case .set(let members): .merged(.array(members.map(MergeTree.init)), .set)
         case .object(let object): .object(object.mapValues(MergeTree.init))
         }
     }

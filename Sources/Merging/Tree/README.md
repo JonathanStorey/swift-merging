@@ -32,6 +32,7 @@ public enum CodableRepresentation {
     case decimal(Decimal)
     case url(URL)
     case array([CodableRepresentation])
+    case set(Set<CodableRepresentation>)   // JSON holds it as an array, sorted
     case object([String: CodableRepresentation])
 }
 ```
@@ -83,10 +84,10 @@ library.
 | The value itself | `init()` |
 | From components | `init(_ elements: some Sequence<Component>)`, from `RangeReplaceableCollection` |
 | Collection | `var startIndex: Int`, `var endIndex: Int`, `subscript(position: Int) -> Component { get set }`, `mutating func replaceSubrange(_:with:)` |
-| Component cases | `key(String)`, `index(Int)` |
+| Component cases | `key(String)`, `index(Int)`, `member(CodableRepresentation)` for a set's member |
 | Literals | `"child.grandchildren[2]"` parsed, `["config", "v1.2"]` exact, a component from `"key"` or `2` |
-| Text | `var description: String`, as `child.grandchildren[2]`, or `.` for the value itself |
-| Codable | an array of strings and integers |
+| Text | `var description: String`, as `child.grandchildren[2]` or `tags{"swift"}`, or `.` for the value itself |
+| Codable | an array of strings, integers and `{"member": value}` objects |
 
 ## CodableSchema
 

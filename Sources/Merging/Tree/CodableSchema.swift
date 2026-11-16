@@ -55,8 +55,8 @@ public indirect enum CodableSchema: Hashable, Sendable {
         Self.cache(self, for: key)
     }
 
-    /// The schema at `path`. An index steps into an array's elements, a key into an object's property or
-    /// a dictionary's values, and either looks through an optional.
+    /// The schema at `path`. An index steps into an array's elements, a member into a set's, a key into an
+    /// object's property or a dictionary's values, and each looks through an optional.
     public subscript(path: CodablePath) -> CodableSchema? {
         var schema = self
         for component in path {
@@ -65,7 +65,7 @@ public indirect enum CodableSchema: Hashable, Sendable {
             case (.key(let key), .object(let object)):
                 guard let property = object[key] else { return nil }
                 schema = property
-            case (.key, .dictionary(let element)), (.index, .array(let element)), (.index, .set(let element)):
+            case (.key, .dictionary(let element)), (.index, .array(let element)), (.index, .set(let element)), (.member, .set(let element)):
                 schema = element
             default:
                 return nil
