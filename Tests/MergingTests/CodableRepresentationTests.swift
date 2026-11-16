@@ -41,12 +41,12 @@ struct Account: Codable, Equatable {
             return
         }
         #expect(object["nickname"] == nil)
-        #expect(object["age"] == .int(30))
-        #expect(object["big"] == .uint(.max))
+        #expect(object["age"] == .integer(30))
+        #expect(object["big"] == .integer(Int128(UInt64.max)))
     }
 
     @Test func aWrongTypeFailsToDecode() {
-        #expect(throws: DecodingError.self) { try TreeDecoder().decode(Account.self, from: .object(["name": .int(1)])) }
+        #expect(throws: DecodingError.self) { try TreeDecoder().decode(Account.self, from: .object(["name": .integer(1)])) }
     }
 }
 
@@ -169,7 +169,7 @@ private func byNode<T: Codable & Sendable>(_ ours: T, _ theirs: T, from base: T)
 
     @Test func aTreeShowsWhatItHolds() throws {
         let tree = try CodableRepresentation(encoding: Point(x: 1, y: 2.5, name: "A"))
-        #expect(tree["x"]?.int == 1)
+        #expect(tree["x"]?.integer == 1)
         #expect(tree["y"]?.double == 2.5)
         #expect(tree["name"]?.string == "A")
         #expect(tree.description == #"{"name": "A", "x": 1, "y": 2.5}"#)
@@ -178,7 +178,7 @@ private func byNode<T: Codable & Sendable>(_ ours: T, _ theirs: T, from base: T)
 
     @Test func literalsBuildTrees() {
         let tree: CodableRepresentation = ["tags": ["a", 1, 2.5, true, nil]]
-        #expect(tree["tags"]?[1] == .int(1))
+        #expect(tree["tags"]?[1] == .integer(1))
         #expect(tree["tags"]?[4]?.isNull == true)
         #expect(tree["missing"] == nil)
     }

@@ -22,9 +22,8 @@ A value's stored form, with typed leaves that round-trip exactly.
 public enum CodableRepresentation {
     case null
     case bool(Bool)
-    case int(Int64)
-    case uint(UInt64)            // only above Int64.max
-    case double(Double)          // Double, or a Float through its shortest form
+    case integer(Int128)         // any integer type up to 64 bits, signed or not
+    case double(Double)          // Double, or a Float through its shortest form, NaN and infinities too
     case string(String)
     case date(Date)
     case data(Data)
@@ -48,7 +47,8 @@ public enum CodableRepresentation {
 | From JSON text | `init(json: String) throws` |
 | JSON-like text | `var description: String` |
 | Codable | `func encode(to encoder: any Encoder) throws`, `init(from decoder: any Decoder) throws` |
-| Literals | `nil`, `true`, `42` (as `Int64`), `1.5`, `"text"`, `[…]`, `["key": …]` |
+| Equality | `==` and `hash(into:)`, comparing a double bit for bit, so a NaN equals itself and `-0.0` isn't `0.0` |
+| Literals | `nil`, `true`, `42` (as `Int128`), `1.5`, `"text"`, `[…]`, `["key": …]` |
 
 ## CodableDifference
 

@@ -5,8 +5,7 @@ import Foundation
 enum MergeTree: Equatable, Sendable {
     case null
     case bool(Bool)
-    case int(Int64)
-    case uint(UInt64)
+    case integer(Int128)
     case double(Double)
     case string(String)
     case date(Date)
@@ -21,9 +20,9 @@ enum MergeTree: Equatable, Sendable {
 }
 
 extension MergeTree {
-    /// An integer, as `int` when it fits and `uint` otherwise.
+    /// An integer, from any integer type up to 64 bits.
     init(_ value: some BinaryInteger) {
-        if let int = Int64(exactly: value) { self = .int(int) } else { self = .uint(UInt64(value)) }
+        self = .integer(Int128(clamping: value))
     }
 
     /// The typed leaf for a `Date`, `Data`, `UUID`, `Decimal` or `URL`, or for a `CodableRepresentation`,
@@ -47,8 +46,7 @@ extension MergeTree {
         switch self {
         case .null: "null"
         case .bool(let value): "\(value)"
-        case .int(let value): "i\(value)"
-        case .uint(let value): "u\(value)"
+        case .integer(let value): "i\(value)"
         case .double(let value): "d\(value)"
         case .string(let value): value.debugDescription
         case .date(let value): "t\(value.timeIntervalSinceReferenceDate)"

@@ -154,5 +154,31 @@ import Testing
         let squashed = try #require(first.followed(by: second))
         #expect(squashed.isEmpty)
     }
+
+    @Test func oneIntegerHoldsEveryWidth() throws {
+        #expect(try CodableRepresentation(encoding: UInt64.max) == .integer(Int128(UInt64.max)))
+        #expect(try CodableRepresentation(encoding: Int64.min) == .integer(Int128(Int64.min)))
+        #expect(try CodableRepresentation(encoding: Int8(-3)) == -3)
+        let big = CodableRepresentation.integer(Int128(UInt64.max))
+        #expect(try big.json == "18446744073709551615")
+        #expect(try CodableRepresentation(json: big.json) == big)
+        #expect(try big.decode(as: UInt64.self) == .max)
+        #expect(throws: DecodingError.self) { try big.decode(as: Int64.self) }
+        #expect(throws: EncodingError.self) { try CodableRepresentation.integer(Int128(UInt64.max) + 1).json }
+    }
+
+    @Test func nanEqualsItself() throws {
+        let nan = try CodableRepresentation(encoding: Double.nan)
+        #expect(nan == .double(.nan))
+        #expect(Set<CodableRepresentation>([.double(.nan), .double(-.nan)]).count == 1)
+        #expect(CodableRepresentation.double(-0.0) != .double(0.0))
+        #expect(try nan.decode(as: Double.self).isNaN)
+        #expect(try CodableRepresentation(encoding: -Double.infinity).decode(as: Double.self) == -.infinity)
+        #expect(throws: EncodingError.self) { try nan.json }
+
+        struct Reading: Codable { var value: Double }
+        #expect(try CodableDifference(from: Reading(value: .nan), to: Reading(value: .nan)).isEmpty)
+        #expect(try CodableDifference(from: Reading(value: 0), to: Reading(value: -0.0)).count == 1)
+    }
 }
 

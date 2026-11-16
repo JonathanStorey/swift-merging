@@ -101,7 +101,7 @@ struct Trip {
     }
 
     @Test func canonicalTextSortsKeys() {
-        let one = MergeTree.object(["b": .int(1), "a": .string("x")])
+        let one = MergeTree.object(["b": .integer(1), "a": .string("x")])
         #expect(one.canonical == #"{"a":"x","b":i1}"#)
     }
 }

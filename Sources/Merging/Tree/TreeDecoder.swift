@@ -35,8 +35,7 @@ private struct Reader: Decoder {
     func read(_ type: Double.Type) throws -> Double {
         switch tree {
         case .double(let value): value
-        case .int(let value): Double(value)
-        case .uint(let value): Double(value)
+        case .integer(let value): Double(value)
         default: throw mismatch(type)
         }
     }
@@ -47,8 +46,7 @@ private struct Reader: Decoder {
 
     func read<T: FixedWidthInteger & Decodable>(_ type: T.Type) throws -> T {
         let value: T? = switch tree {
-        case .int(let value): T(exactly: value)
-        case .uint(let value): T(exactly: value)
+        case .integer(let value): T(exactly: value)
         case .double(let value): T(exactly: value)
         default: nil
         }
@@ -71,7 +69,7 @@ private struct Reader: Decoder {
         case is Date.Type:
             value = switch tree {
             case .date(let value): value
-            case .double, .int, .uint: Date(timeIntervalSinceReferenceDate: try read(Double.self))
+            case .double, .integer: Date(timeIntervalSinceReferenceDate: try read(Double.self))
             default: nil
             }
         case is Data.Type:
@@ -89,8 +87,7 @@ private struct Reader: Decoder {
         case is Decimal.Type:
             value = switch tree {
             case .decimal(let value): value
-            case .int(let value): Decimal(value)
-            case .uint(let value): Decimal(value)
+            case .integer(let value): Decimal(string: "\(value)")
             case .double(let value): Decimal(string: "\(value)")
             case .string(let value): Decimal(string: value)
             default: nil

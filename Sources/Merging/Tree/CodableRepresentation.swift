@@ -5,7 +5,7 @@ import Foundation
 ///
 /// ```swift
 /// let difference = try CodableDifference(from: original, to: edited)
-/// if case .replace(_, .int(let old), .int(let new))? = difference.first { print(old, new) }
+/// if case .replace(_, .integer(let old), .integer(let new))? = difference.first { print(old, new) }
 /// ```
 ///
 /// A `Date`, `Data`, `UUID`, `Decimal` or `URL` keeps its type, so a value round-trips exactly and a store
@@ -16,11 +16,9 @@ import Foundation
 public enum CodableRepresentation: Hashable, Sendable {
     case null
     case bool(Bool)
-    /// A whole number, from any integer type.
-    case int(Int64)
-    /// A whole number too large for `int`.
-    case uint(UInt64)
-    /// A number with a fractional part, from `Double` or `Float`.
+    /// A whole number, from any integer type up to 64 bits, signed or not.
+    case integer(Int128)
+    /// A number with a fractional part, from `Double` or `Float`, including NaN and the infinities.
     case double(Double)
     case string(String)
     /// A `Date`. JSON holds it as seconds since 2001.
@@ -78,20 +76,15 @@ extension CodableRepresentation {
         return value
     }
 
-    /// The whole number, if it fits in an `Int64`.
-    var int: Int64? {
-        switch self {
-        case .int(let value): value
-        case .uint(let value): Int64(exactly: value)
-        default: nil
-        }
+    var integer: Int128? {
+        guard case .integer(let value) = self else { return nil }
+        return value
     }
 
     /// Any number, as a `Double`.
     var double: Double? {
         switch self {
-        case .int(let value): Double(value)
-        case .uint(let value): Double(value)
+        case .integer(let value): Double(value)
         case .double(let value): value
         default: nil
         }
@@ -158,14 +151,59 @@ extension CodableRepresentation {
     }
 }
 
+extension CodableRepresentation {
+    /// Whether both hold the same value. A double compares bit for bit, so every NaN equals every other,
+    /// and `-0.0` isn't `0.0`.
+    public static func == (lhs: CodableRepresentation, rhs: CodableRepresentation) -> Bool {
+        switch (lhs, rhs) {
+        case (.null, .null): true
+        case let (.bool(lhs), .bool(rhs)): lhs == rhs
+        case let (.integer(lhs), .integer(rhs)): lhs == rhs
+        case let (.double(lhs), .double(rhs)): lhs.identity == rhs.identity
+        case let (.string(lhs), .string(rhs)): lhs == rhs
+        case let (.date(lhs), .date(rhs)): lhs == rhs
+        case let (.data(lhs), .data(rhs)): lhs == rhs
+        case let (.uuid(lhs), .uuid(rhs)): lhs == rhs
+        case let (.decimal(lhs), .decimal(rhs)): lhs == rhs
+        case let (.url(lhs), .url(rhs)): lhs == rhs
+        case let (.array(lhs), .array(rhs)): lhs == rhs
+        case let (.set(lhs), .set(rhs)): lhs == rhs
+        case let (.object(lhs), .object(rhs)): lhs == rhs
+        default: false
+        }
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        switch self {
+        case .null: hasher.combine(0)
+        case .bool(let value): hasher.combine(1); hasher.combine(value)
+        case .integer(let value): hasher.combine(2); hasher.combine(value)
+        case .double(let value): hasher.combine(3); hasher.combine(value.identity)
+        case .string(let value): hasher.combine(4); hasher.combine(value)
+        case .date(let value): hasher.combine(5); hasher.combine(value)
+        case .data(let value): hasher.combine(6); hasher.combine(value)
+        case .uuid(let value): hasher.combine(7); hasher.combine(value)
+        case .decimal(let value): hasher.combine(8); hasher.combine(value)
+        case .url(let value): hasher.combine(9); hasher.combine(value)
+        case .array(let value): hasher.combine(10); hasher.combine(value)
+        case .set(let value): hasher.combine(11); hasher.combine(value)
+        case .object(let value): hasher.combine(12); hasher.combine(value)
+        }
+    }
+}
+
+private extension Double {
+    /// The bits that identify this value, with every NaN the same.
+    var identity: UInt64 { isNaN ? Double.nan.bitPattern : bitPattern }
+}
+
 extension CodableRepresentation: CustomStringConvertible {
     /// The tree as JSON, with keys and set members sorted and a date in ISO 8601.
     public var description: String {
         switch self {
         case .null: "null"
         case .bool(let value): "\(value)"
-        case .int(let value): "\(value)"
-        case .uint(let value): "\(value)"
+        case .integer(let value): "\(value)"
         case .double(let value): "\(value)"
         case .string(let value): value.debugDescription
         case .date(let value): value.ISO8601Format().debugDescription
@@ -190,8 +228,15 @@ extension CodableRepresentation: Codable {
         switch self {
         case .null: try container.encodeNil()
         case .bool(let value): try container.encode(value)
-        case .int(let value): try container.encode(value)
-        case .uint(let value): try container.encode(value)
+        case .integer(let value):
+            if let value = Int64(exactly: value) {
+                try container.encode(value)
+            } else if let value = UInt64(exactly: value) {
+                try container.encode(value)
+            } else {
+                let context = EncodingError.Context(codingPath: encoder.codingPath, debugDescription: "\(value) is outside Int64 and UInt64.")
+                throw EncodingError.invalidValue(value, context)
+            }
         case .double(let value): try container.encode(value)
         case .string(let value): try container.encode(value)
         case .date(let value): try container.encode(value)
@@ -212,9 +257,9 @@ extension CodableRepresentation: Codable {
         } else if let value = try? container.decode(Bool.self) {
             self = .bool(value)
         } else if let value = try? container.decode(Int64.self) {
-            self = .int(value)
+            self = .integer(Int128(value))
         } else if let value = try? container.decode(UInt64.self) {
-            self = .uint(value)
+            self = .integer(Int128(value))
         } else if let value = try? container.decode(Double.self) {
             self = .double(value)
         } else if let value = try? container.decode(String.self) {
@@ -259,7 +304,7 @@ extension CodableRepresentation: ExpressibleByNilLiteral, ExpressibleByBooleanLi
 {
     public init(nilLiteral: ()) { self = .null }
     public init(booleanLiteral value: Bool) { self = .bool(value) }
-    public init(integerLiteral value: Int64) { self = .int(value) }
+    public init(integerLiteral value: Int128) { self = .integer(value) }
     public init(floatLiteral value: Double) { self = .double(value) }
     public init(stringLiteral value: String) { self = .string(value) }
     public init(arrayLiteral elements: CodableRepresentation...) { self = .array(elements) }
@@ -275,8 +320,7 @@ extension CodableRepresentation {
         self = switch tree {
         case .null: .null
         case .bool(let value): .bool(value)
-        case .int(let value): .int(value)
-        case .uint(let value): .uint(value)
+        case .integer(let value): .integer(value)
         case .double(let value): .double(value)
         case .string(let value): .string(value)
         case .date(let value): .date(value)
@@ -298,8 +342,7 @@ extension MergeTree {
         self = switch tree {
         case .null: .null
         case .bool(let value): .bool(value)
-        case .int(let value): .int(value)
-        case .uint(let value): .uint(value)
+        case .integer(let value): .integer(value)
         case .double(let value): .double(value)
         case .string(let value): .string(value)
         case .date(let value): .date(value)

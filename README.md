@@ -123,7 +123,7 @@ the value. A path is a collection of keys and indices, like `IndexPath`.
 let difference = try CodableDifference(from: original, to: edited)
 for change in difference { print(change) }   // ~ child.grandchildren[0]: "Ava" → "Eva"
 
-if case .replace(path: "age", old: _, new: .int(let age))? = difference.first { print(age) }
+if case .replace(path: "age", old: _, new: .integer(let age))? = difference.first { print(age) }
 let rebuilt = try original.applying(difference)            // == edited
 let undone = try edited.applying(difference.inverse())     // == original
 let squashed = first.followed(by: second)                  // one difference from first's original to second's result
