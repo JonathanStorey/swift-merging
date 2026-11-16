@@ -131,6 +131,8 @@ extension SchemaProbe: SingleValueDecodingContainer {
     func decode(_ type: UInt16.Type) -> UInt16 { record(.integer, 0) }
     func decode(_ type: UInt32.Type) -> UInt32 { record(.integer, 0) }
     func decode(_ type: UInt64.Type) -> UInt64 { record(.integer, 0) }
+    func decode(_ type: Int128.Type) -> Int128 { record(.integer, 0) }
+    func decode(_ type: UInt128.Type) -> UInt128 { record(.integer, 0) }
 }
 
 /// Has every key, none of them `nil`, and offers one key to code that lists them, as a dictionary does.
@@ -165,6 +167,8 @@ private struct ProbeKeyedContainer<Key: CodingKey>: KeyedDecodingContainerProtoc
     func decode(_ type: UInt16.Type, forKey key: Key) -> UInt16 { probe.child(forKey: key).decode(type) }
     func decode(_ type: UInt32.Type, forKey key: Key) -> UInt32 { probe.child(forKey: key).decode(type) }
     func decode(_ type: UInt64.Type, forKey key: Key) -> UInt64 { probe.child(forKey: key).decode(type) }
+    func decode(_ type: Int128.Type, forKey key: Key) -> Int128 { probe.child(forKey: key).decode(type) }
+    func decode(_ type: UInt128.Type, forKey key: Key) -> UInt128 { probe.child(forKey: key).decode(type) }
     func decode<T: Decodable>(_ type: T.Type, forKey key: Key) throws -> T { try probe.child(forKey: key).decode(type) }
 
     func nestedContainer<NestedKey: CodingKey>(keyedBy type: NestedKey.Type, forKey key: Key) -> KeyedDecodingContainer<NestedKey> {
@@ -212,6 +216,8 @@ private struct ProbeUnkeyedContainer: UnkeyedDecodingContainer {
     mutating func decode(_ type: UInt16.Type) -> UInt16 { next().decode(type) }
     mutating func decode(_ type: UInt32.Type) -> UInt32 { next().decode(type) }
     mutating func decode(_ type: UInt64.Type) -> UInt64 { next().decode(type) }
+    mutating func decode(_ type: Int128.Type) -> Int128 { next().decode(type) }
+    mutating func decode(_ type: UInt128.Type) -> UInt128 { next().decode(type) }
     mutating func decode<T: Decodable>(_ type: T.Type) throws -> T { try next().decode(type) }
 
     mutating func nestedContainer<NestedKey: CodingKey>(keyedBy type: NestedKey.Type) -> KeyedDecodingContainer<NestedKey> {

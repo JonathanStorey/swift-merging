@@ -215,9 +215,15 @@ extension CodablePath.Component: Codable {
 }
 
 extension Set<CodableRepresentation> {
-    /// The members in a fixed order, by their text, since a set has none of its own.
+    /// The members in a fixed order, by their text and then their case, since a set has none of its own.
     var ordered: [CodableRepresentation] {
-        sorted { $0.description < $1.description }
+        let keyed: [(text: String, member: CodableRepresentation)] = map { ($0.description, $0) }
+        return keyed.sorted(by: Self.precedes).map(\.member)
+    }
+
+    private static func precedes(_ lhs: (text: String, member: CodableRepresentation), _ rhs: (text: String, member: CodableRepresentation)) -> Bool {
+        if lhs.text != rhs.text { return lhs.text < rhs.text }
+        return lhs.member.caseIndex < rhs.member.caseIndex
     }
 
     /// The member equal to `member`, or failing that, one with the same JSON form, so a `.string` read

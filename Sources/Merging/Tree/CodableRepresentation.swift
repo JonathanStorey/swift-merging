@@ -16,8 +16,10 @@ import Foundation
 public enum CodableRepresentation: Hashable, Sendable {
     case null
     case bool(Bool)
-    /// A whole number, from any integer type up to 64 bits, signed or not.
-    case integer(Int128)
+    /// A whole number, from any integer type up to 64 bits, signed or not. Boxed, so the enum keeps an
+    /// 8-byte alignment: an inline `Int128` gave it 16, and Swift 6.1 on x86-64 Linux then read it from a
+    /// misaligned stack slot and crashed.
+    indirect case integer(Int128)
     /// A number with a fractional part, from `Double` or `Float`, including NaN and the infinities.
     case double(Double)
     case string(String)
@@ -152,8 +154,9 @@ extension CodableRepresentation {
 }
 
 extension CodableRepresentation {
-    /// Whether both hold the same value. A double compares bit for bit, so every NaN equals every other,
-    /// and `-0.0` isn't `0.0`.
+    /// Whether both hold the same value. A double or a date compares bit for bit, so every NaN equals
+    /// every other and `-0.0` isn't `0.0`. A decimal NaN equals itself too, and a URL compares by its
+    /// absolute form, as JSON holds it.
     public static func == (lhs: CodableRepresentation, rhs: CodableRepresentation) -> Bool {
         switch (lhs, rhs) {
         case (.null, .null): true
@@ -161,11 +164,11 @@ extension CodableRepresentation {
         case let (.integer(lhs), .integer(rhs)): lhs == rhs
         case let (.double(lhs), .double(rhs)): lhs.identity == rhs.identity
         case let (.string(lhs), .string(rhs)): lhs == rhs
-        case let (.date(lhs), .date(rhs)): lhs == rhs
+        case let (.date(lhs), .date(rhs)): lhs.timeIntervalSinceReferenceDate.identity == rhs.timeIntervalSinceReferenceDate.identity
         case let (.data(lhs), .data(rhs)): lhs == rhs
         case let (.uuid(lhs), .uuid(rhs)): lhs == rhs
-        case let (.decimal(lhs), .decimal(rhs)): lhs == rhs
-        case let (.url(lhs), .url(rhs)): lhs == rhs
+        case let (.decimal(lhs), .decimal(rhs)): lhs == rhs || lhs.isNaN && rhs.isNaN
+        case let (.url(lhs), .url(rhs)): lhs.absoluteURL == rhs.absoluteURL
         case let (.array(lhs), .array(rhs)): lhs == rhs
         case let (.set(lhs), .set(rhs)): lhs == rhs
         case let (.object(lhs), .object(rhs)): lhs == rhs
@@ -174,20 +177,40 @@ extension CodableRepresentation {
     }
 
     public func hash(into hasher: inout Hasher) {
+        hasher.combine(caseIndex)
         switch self {
-        case .null: hasher.combine(0)
-        case .bool(let value): hasher.combine(1); hasher.combine(value)
-        case .integer(let value): hasher.combine(2); hasher.combine(value)
-        case .double(let value): hasher.combine(3); hasher.combine(value.identity)
-        case .string(let value): hasher.combine(4); hasher.combine(value)
-        case .date(let value): hasher.combine(5); hasher.combine(value)
-        case .data(let value): hasher.combine(6); hasher.combine(value)
-        case .uuid(let value): hasher.combine(7); hasher.combine(value)
-        case .decimal(let value): hasher.combine(8); hasher.combine(value)
-        case .url(let value): hasher.combine(9); hasher.combine(value)
-        case .array(let value): hasher.combine(10); hasher.combine(value)
-        case .set(let value): hasher.combine(11); hasher.combine(value)
-        case .object(let value): hasher.combine(12); hasher.combine(value)
+        case .null: break
+        case .bool(let value): hasher.combine(value)
+        case .integer(let value): hasher.combine(value)
+        case .double(let value): hasher.combine(value.identity)
+        case .string(let value): hasher.combine(value)
+        case .date(let value): hasher.combine(value.timeIntervalSinceReferenceDate.identity)
+        case .data(let value): hasher.combine(value)
+        case .uuid(let value): hasher.combine(value)
+        case .decimal(let value): hasher.combine(value.isNaN ? Decimal.nan : value)
+        case .url(let value): hasher.combine(value.absoluteURL)
+        case .array(let value): hasher.combine(value)
+        case .set(let value): hasher.combine(value)
+        case .object(let value): hasher.combine(value)
+        }
+    }
+
+    /// The case's place in the declaration, which tells apart values whose text is the same.
+    var caseIndex: Int {
+        switch self {
+        case .null: 0
+        case .bool: 1
+        case .integer: 2
+        case .double: 3
+        case .string: 4
+        case .date: 5
+        case .data: 6
+        case .uuid: 7
+        case .decimal: 8
+        case .url: 9
+        case .array: 10
+        case .set: 11
+        case .object: 12
         }
     }
 }
