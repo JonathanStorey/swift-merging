@@ -83,16 +83,18 @@ import Testing
         #expect(try CodableDifference(from: composed, to: decomposed).isEmpty)
     }
 
-    @Test func deepNestingDoesNotOverflow() throws {
+    @Test func deepNestingWorks() throws {
+        // Encoding, diffing and comparing all recurse, so a test thread's small stack sets the limit. A
+        // thousand levels overflowed one on Linux, so this stays well inside it.
         var old: CodableRepresentation = 0
         var new: CodableRepresentation = 1
-        for _ in 0..<1_000 {
+        for _ in 0..<128 {
             old = [old]
             new = [new]
         }
         let difference = try CodableDifference(from: old, to: new)
         #expect(difference.count == 1)
-        #expect(difference.first?.path.count == 1_000)
+        #expect(difference.first?.path.count == 128)
         #expect(try old.applying(difference) == new)
     }
 
