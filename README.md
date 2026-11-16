@@ -175,6 +175,9 @@ schema["child.grandchildren[0]"]    // .string
 A raw-value enum must be `CaseIterable`. A type that contains itself, an enum with associated values, or
 an `init(from:)` that rejects placeholder values throws.
 
+[Codable types](Sources/Merging/Tree/README.md) lists the full public surface of `CodableRepresentation`,
+`CodableDifference` and `CodableSchema`.
+
 ## Requirements
 
 Swift 6.1 (Xcode 16.3) or later. iOS 18, macOS 15, tvOS 18, watchOS 11 and
